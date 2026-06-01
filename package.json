@@ -1,0 +1,23 @@
+{
+  "name": "translate-extension",
+  "version": "1.0.0",
+  "description": "沉浸式翻译浏览器插件 - 支持划词翻译和双语对照",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "idb": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/jsdom": "^28.0.3",
+    "jsdom": "^29.1.1",
+    "sharp": "^0.34.5",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}

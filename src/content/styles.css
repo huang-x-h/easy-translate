@@ -1,0 +1,72 @@
+/* Content script styles - injected into all pages */
+
+/* Animation keyframes */
+@keyframes immersive-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes immersive-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes immersive-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Bilingual translation styles */
+.immersive-translate-bilingual {
+  margin: 8px 0 !important;
+  padding: 12px 16px !important;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border-left: 3px solid #0ea5e9 !important;
+  border-radius: 0 8px 8px 0 !important;
+  font-size: 0.95em !important;
+  line-height: 1.6 !important;
+  color: #0c4a6e !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  animation: immersive-fade-in 0.3s ease !important;
+}
+
+.immersive-translate-bilingual:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Animation classes */
+#immersive-translate-progress {
+  animation: immersive-slide-in 0.3s ease !important;
+}
+
+#immersive-translate-notification {
+  animation: immersive-slide-in 0.3s ease !important;
+}
+
+.immersive-translate-floating-button {
+  transition: transform 0.2s, box-shadow 0.2s !important;
+}
+
+.immersive-translate-floating-button:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+.immersive-translate-popup {
+  animation: immersive-fade-in 0.2s ease !important;
+}
+
+/* Ensure high z-index */
+.immersive-translate-floating-button,
+.immersive-translate-popup,
+#immersive-translate-progress,
+#immersive-translate-notification {
+  z-index: 2147483647 !important;
+}
