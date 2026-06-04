@@ -59,6 +59,15 @@
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
+.immersive-translate-floating-button .logo,
+.immersive-translate-modal-title .logo {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+  object-fit: contain !important;
+  border-radius: 4px !important;
+}
+
 .immersive-translate-popup {
   animation: immersive-fade-in 0.2s ease !important;
 }
@@ -79,8 +88,7 @@
 }
 
 .immersive-translate-modal-title-left,
-.immersive-translate-modal-title-right,
-.service-select-content {
+.immersive-translate-modal-title-right {
   display: flex !important;
   align-items: center !important;
 }
@@ -98,34 +106,6 @@
   font-size: 13px !important;
   font-weight: 600 !important;
   color: #222 !important;
-}
-
-.immersive-translate-service-select {
-  max-width: 140px !important;
-  padding: 4px 8px !important;
-  border-radius: 6px !important;
-  background: #f6f8f9 !important;
-  color: #666 !important;
-  font-size: 12px !important;
-}
-
-.service-select-content {
-  gap: 6px !important;
-  min-width: 0 !important;
-}
-
-.service-icon {
-  width: 10px !important;
-  height: 10px !important;
-  flex: 0 0 auto !important;
-  border-radius: 50% !important;
-  background: #ec4c8c !important;
-}
-
-.select-service-name {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
 }
 
 .icon-wrapper-no-bg {
