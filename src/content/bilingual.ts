@@ -1,6 +1,6 @@
 import { TranslationAPI } from '../shared/api';
 import { StorageManager } from '../shared/storage';
-import { extractArticle, extractParagraphs, ParagraphInfo } from './readability';
+import { extractArticle, extractParagraphs, getMainContentElement, ParagraphInfo } from './readability';
 
 export class BilingualTranslator {
   private isTranslated: boolean = false;
@@ -119,6 +119,32 @@ export class BilingualTranslator {
       .filter(w => w.length > 2); // Filter short words
   }
 
+  private findFallbackContentElement(): HTMLElement | null {
+    const selectors = [
+      'article',
+      '[role="main"]',
+      'main',
+      '.post-content',
+      '.entry-content',
+      '.content',
+      '.article-content',
+      '.article-body',
+      '.markdown-body',
+      '#content',
+      '#main',
+      'body',
+    ];
+
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element && extractParagraphs(element as HTMLElement).length > 0) {
+        return element as HTMLElement;
+      }
+    }
+
+    return null;
+  }
+
   public async translatePage(): Promise<void> {
     if (this.isTranslating || this.isTranslated) return;
 
@@ -127,7 +153,8 @@ export class BilingualTranslator {
     try {
       // Extract article content using Readability
       const article = extractArticle();
-      if (!article || !article.textContent || article.textContent.length < 100) {
+      const fallbackRootElement = getMainContentElement() || this.findFallbackContentElement();
+      if ((!article || !article.textContent || article.textContent.length < 100) && !fallbackRootElement) {
         this.showNotification('无法提取文章内容，请确保页面有可读内容');
         this.isTranslating = false;
         return;
@@ -144,7 +171,9 @@ export class BilingualTranslator {
 
       // Find the main content element using Readability's extracted content
       // Try to match the extracted content back to a DOM element
-      const rootElement = this.findContentElement(article.textContent);
+      const rootElement = article?.textContent && article.textContent.length >= 100
+        ? this.findContentElement(article.textContent)
+        : fallbackRootElement;
       if (!rootElement) {
         this.showNotification('无法定位页面正文内容');
         this.isTranslating = false;
@@ -212,7 +241,7 @@ export class BilingualTranslator {
       }
 
       // Clear state
-      this.isTranslated = false;
+      this.isTranslated = !this.isCancelling && translatedCount > 0;
       this.isTranslating = false;
       this.isCancelling = false;
       this.hideProgress();

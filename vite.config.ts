@@ -20,7 +20,7 @@ export default defineConfig({
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name || '';
           if (info.endsWith('.css')) {
-            return 'assets/[name]-[hash][extname]';
+            return '[name][extname]';
           }
           if (info.endsWith('.png') || info.endsWith('.svg') || info.endsWith('.jpg')) {
             return 'icons/[name][extname]';

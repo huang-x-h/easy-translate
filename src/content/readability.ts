@@ -75,7 +75,9 @@ export function extractParagraphs(rootElement: HTMLElement): ParagraphInfo[] {
   // Leaf elements are the actual content containers
   const leafTags = ['p', 'li', 'td', 'th', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dd', 'dt'];
   // Container elements are skipped - they contain other elements
-  const containerTags = ['section', 'article', 'div', 'main', 'aside', 'nav', 'header', 'footer', 'ul', 'ol', 'table', 'tbody', 'thead', 'tfoot', 'tr'];
+  const containerTags = ['section', 'article', 'div', 'main', 'ul', 'ol', 'table', 'tbody', 'thead', 'tfoot', 'tr'];
+  // These subtrees are page chrome or controls, not translatable content
+  const ignoredSubtreeTags = ['aside', 'nav', 'header', 'footer', 'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'video', 'audio', 'form', 'button', 'input', 'select', 'textarea'];
   
   // Walk through all elements in the root
   const walker = document.createTreeWalker(
@@ -83,7 +85,16 @@ export function extractParagraphs(rootElement: HTMLElement): ParagraphInfo[] {
     NodeFilter.SHOW_ELEMENT,
     {
       acceptNode: (node) => {
-        const tagName = (node as HTMLElement).tagName.toLowerCase();
+        const element = node as HTMLElement;
+        const tagName = element.tagName.toLowerCase();
+
+        if (
+          ignoredSubtreeTags.includes(tagName) ||
+          element.closest('.immersive-translate-floating-button, .immersive-translate-modal, .immersive-translate-bilingual, #immersive-translate-progress, #immersive-translate-notification') ||
+          isHiddenElement(element)
+        ) {
+          return NodeFilter.FILTER_REJECT;
+        }
         
         // Skip container elements - they contain other content
         if (containerTags.includes(tagName)) {
@@ -119,6 +130,11 @@ export function extractParagraphs(rootElement: HTMLElement): ParagraphInfo[] {
   }
 
   return paragraphs;
+}
+
+function isHiddenElement(element: HTMLElement): boolean {
+  const style = window.getComputedStyle(element);
+  return style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0';
 }
 
 /**

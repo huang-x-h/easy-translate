@@ -13,7 +13,15 @@ class BackgroundService {
     chrome.runtime.onInstalled.addListener(this.handleInstall.bind(this));
 
     // Listen for messages from content scripts and popup
-    chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      this.handleMessage(message, sender, sendResponse).catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      });
+      return true;
+    });
 
     // Handle keyboard shortcuts
     chrome.commands.onCommand.addListener(this.handleCommand.bind(this));

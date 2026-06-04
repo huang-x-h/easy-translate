@@ -17,7 +17,15 @@ class ContentScript {
     document.addEventListener('mouseup', this.handleTextSelection.bind(this));
     
     // Listen for messages from background/popup
-    chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      this.handleMessage(message, sender, sendResponse).catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      });
+      return true;
+    });
     
     // Listen for keyboard shortcuts
     document.addEventListener('keydown', this.handleKeyDown.bind(this));
