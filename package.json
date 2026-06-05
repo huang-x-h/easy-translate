@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/twitter_regression_test.mjs && node scripts/twitter_integration_test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",

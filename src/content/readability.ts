@@ -64,6 +64,57 @@ export function extractArticle(): ArticleData | null {
   }
 }
 
+// Platform-specific selectors that mark divs as leaf content containers
+const leafContentSelectors = [
+  '[data-testid="tweetText"]',
+  '[data-testid="postText"]',
+  '.tweet-text',
+  '.post-text',
+];
+
+// Leaf elements are the actual content containers
+const leafTags = ['p', 'li', 'td', 'th', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dd', 'dt'];
+// Container elements are skipped - they contain other elements
+const containerTags = ['section', 'article', 'div', 'main', 'ul', 'ol', 'table', 'tbody', 'thead', 'tfoot', 'tr'];
+// These subtrees are page chrome or controls, not translatable content
+const ignoredSubtreeTags = ['aside', 'nav', 'header', 'footer', 'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'video', 'audio', 'form', 'button', 'input', 'select', 'textarea'];
+
+/**
+ * Check if an element should be treated as a leaf content container.
+ * Supports traditional leaf tags plus platform-specific div wrappers
+ * (e.g. Twitter/X tweetText, Facebook postText) and a generic heuristic
+ * for divs that only contain inline content and substantial text.
+ */
+function isLeafContent(element: HTMLElement): boolean {
+  const tagName = element.tagName.toLowerCase();
+
+  if (leafTags.includes(tagName)) {
+    return true;
+  }
+
+  // Platform-specific content markers (e.g. Twitter/X)
+  for (const selector of leafContentSelectors) {
+    if (element.matches(selector)) {
+      return true;
+    }
+  }
+
+  // Generic heuristic: a div without block/container children and with substantial text
+  if (tagName === 'div') {
+    const hasBlockChildren = Array.from(element.children).some((child) => {
+      const childTag = child.tagName.toLowerCase();
+      return containerTags.includes(childTag) || leafTags.includes(childTag);
+    });
+    if (hasBlockChildren) {
+      return false;
+    }
+    const text = (element.textContent || '').trim();
+    return text.length >= 20;
+  }
+
+  return false;
+}
+
 /**
  * Extract paragraphs from a root element
  * Only extracts leaf elements to avoid duplicates
@@ -71,13 +122,6 @@ export function extractArticle(): ArticleData | null {
 export function extractParagraphs(rootElement: HTMLElement): ParagraphInfo[] {
   const paragraphs: ParagraphInfo[] = [];
   const seenTexts = new Set<string>();
-  
-  // Leaf elements are the actual content containers
-  const leafTags = ['p', 'li', 'td', 'th', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dd', 'dt'];
-  // Container elements are skipped - they contain other elements
-  const containerTags = ['section', 'article', 'div', 'main', 'ul', 'ol', 'table', 'tbody', 'thead', 'tfoot', 'tr'];
-  // These subtrees are page chrome or controls, not translatable content
-  const ignoredSubtreeTags = ['aside', 'nav', 'header', 'footer', 'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'video', 'audio', 'form', 'button', 'input', 'select', 'textarea'];
   
   // Walk through all elements in the root
   const walker = document.createTreeWalker(
@@ -96,16 +140,16 @@ export function extractParagraphs(rootElement: HTMLElement): ParagraphInfo[] {
           return NodeFilter.FILTER_REJECT;
         }
         
-        // Skip container elements - they contain other content
-        if (containerTags.includes(tagName)) {
+        // Skip container elements unless they are recognized as leaf content
+        if (containerTags.includes(tagName) && !isLeafContent(element)) {
           return NodeFilter.FILTER_SKIP;
         }
-        
-        // Only accept leaf elements with text
-        if (!leafTags.includes(tagName)) {
+
+        // Only accept leaf content elements with text
+        if (!isLeafContent(element)) {
           return NodeFilter.FILTER_SKIP;
         }
-        
+
         return NodeFilter.FILTER_ACCEPT;
       }
     }
@@ -203,9 +247,6 @@ export function getMainContentElement(): HTMLElement | null {
 
   const article = extractArticle();
   if (article && article.content) {
-    const temp = document.createElement('div');
-    temp.innerHTML = article.content;
-    
     const allElements = document.querySelectorAll('article, [role="main"], main, .content, #content, body');
     let bestElement: HTMLElement | null = null;
     let maxMatchScore = 0;

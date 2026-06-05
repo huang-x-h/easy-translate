@@ -195,7 +195,7 @@ export class SelectionPopup {
       return this.renderFallbackLogoSvg();
     }
 
-    return `<img class="logo" src="${logoUrl}" alt="EasyTranslate" width="18" height="18">`;
+    return `<img class="logo" src="${logoUrl}" alt="EasyTranslate" width="18" height="18" />`;
   }
 
   private getExtensionUrl(path: string): string | null {
@@ -298,7 +298,7 @@ export class SelectionPopup {
     this.replacePopupBody(`
       <div class="immersive-translate-error">
         <div class="immersive-translate-error-text">
-          &#x7ffb;&#x8bd1;&#x5931;&#x8d25;&#x3002;<br><br>&#x9519;&#x8bef;&#x539f;&#x56e0;&#xff1a;${this.escapeHtml(message)}
+          &#x7ffb;&#x8bd1;&#x5931;&#x8d25;&#x3002;<br /><br />&#x9519;&#x8bef;&#x539f;&#x56e0;&#xff1a;${this.escapeHtml(message)}
         </div>
       </div>
     `);

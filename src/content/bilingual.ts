@@ -31,8 +31,11 @@ export class BilingualTranslator {
   }
 
   /**
-   * Find DOM element that contains the given text content
-   * Uses Readability's extracted content to locate the corresponding element
+   * Find DOM element that contains the given text content.
+   * Uses Readability's extracted content to locate the corresponding element.
+   * Prefers the smallest container with high overlap so single-article pages
+   * stay precise, while social feeds (e.g. X/Twitter) that spread content
+   * across multiple articles fall back to the broader wrapper (main/section).
    */
   private findContentElement(textContent: string): HTMLElement | null {
     // Common selectors
@@ -54,41 +57,49 @@ export class BilingualTranslator {
       '.main-content',
     ];
 
-    // First try: find by selector
+    // Collect all matching candidates with scores instead of returning on first hit
+    const candidates: { element: HTMLElement; overlap: number }[] = [];
+
     for (const selector of selectors) {
-      const element = document.querySelector(selector);
-      if (element) {
+      const elements = document.querySelectorAll(selector);
+      for (const element of Array.from(elements)) {
         const elementText = element.textContent || '';
-        // Check if this element contains a significant portion of the article
         const overlap = this.calculateOverlap(elementText, textContent);
-        if (overlap > 0.5) {
-          return element as HTMLElement;
+        if (overlap > 0.3) {
+          candidates.push({ element: element as HTMLElement, overlap });
         }
       }
     }
 
-    // Second try: find element with highest text overlap
-    const candidates = document.querySelectorAll('section, div, article, main');
-    let bestElement: HTMLElement | null = null;
-    let bestScore = 0;
-
-    for (const candidate of Array.from(candidates)) {
-      const candidateText = (candidate as HTMLElement).textContent || '';
-      if (candidateText.length < 500) continue; // Skip small elements
-      
-      const overlap = this.calculateOverlap(candidateText, textContent);
-      if (overlap > bestScore) {
-        bestScore = overlap;
-        bestElement = candidate as HTMLElement;
+    // Also consider broader candidates when no selector matched well
+    if (candidates.length === 0) {
+      const broadCandidates = document.querySelectorAll('section, div, article, main');
+      for (const candidate of Array.from(broadCandidates)) {
+        const candidateText = (candidate as HTMLElement).textContent || '';
+        if (candidateText.length < 500) continue;
+        const overlap = this.calculateOverlap(candidateText, textContent);
+        if (overlap > 0.3) {
+          candidates.push({ element: candidate as HTMLElement, overlap });
+        }
       }
     }
 
-    if (bestScore > 0.3) {
-      return bestElement;
+    if (candidates.length === 0) {
+      return document.body;
     }
 
-    // Fallback: use body as last resort
-    return document.body;
+    // Prefer the candidate with the highest overlap; tie-break by choosing
+    // the smallest container (shorter text length) for precision on normal
+    // article pages. This lets X/Twitter feeds select the broader wrapper
+    // when its overlap is materially higher than a single article.
+    candidates.sort((a, b) => {
+      if (Math.abs(b.overlap - a.overlap) > 0.05) {
+        return b.overlap - a.overlap;
+      }
+      return (a.element.textContent?.length || 0) - (b.element.textContent?.length || 0);
+    });
+
+    return candidates[0].element;
   }
 
   /**
