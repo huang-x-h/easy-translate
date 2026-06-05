@@ -190,7 +190,7 @@ export class SelectionPopup {
   }
 
   private renderLogo(): string {
-    const logoUrl = this.getExtensionUrl('icons/logo.png');
+    const logoUrl = this.getExtensionUrl('icons/icon-32.png');
     if (!logoUrl) {
       return this.renderFallbackLogoSvg();
     }

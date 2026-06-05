@@ -3,12 +3,12 @@ import { TranslationConfig, CacheEntry, DEFAULT_CONFIG, STORAGE_KEYS } from './t
 export class StorageManager {
   // Configuration methods
   static async getConfig(): Promise<TranslationConfig> {
-    const result = await chrome.storage.sync.get(STORAGE_KEYS.CONFIG);
+    const result = await chrome.storage.local.get(STORAGE_KEYS.CONFIG);
     return { ...DEFAULT_CONFIG, ...(result[STORAGE_KEYS.CONFIG] || {}) };
   }
 
   static async setConfig(config: TranslationConfig): Promise<void> {
-    await chrome.storage.sync.set({ [STORAGE_KEYS.CONFIG]: config });
+    await chrome.storage.local.set({ [STORAGE_KEYS.CONFIG]: config });
   }
 
   // Cache methods

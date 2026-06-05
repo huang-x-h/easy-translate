@@ -2,7 +2,11 @@
   "manifest_version": 3,
   "name": "EasyTranslate",
   "version": "1.0.0",
-  "description": "支持划词翻译和双语对照的浏览器翻译插件",
+  "description": "AI-powered translator with selection & bilingual page reading",
+  "author": {
+    "email": "huang.x.hui@gmail.com"
+  },
+  "homepage_url": "https://github.com/huangxinghui/translate-extension",
   "permissions": [
     "storage",
     "activeTab",
@@ -26,31 +30,31 @@
   "action": {
     "default_popup": "src/popup/index.html",
     "default_icon": {
-      "16": "icons/logo.png",
-      "32": "icons/logo.png",
-      "48": "icons/logo.png",
-      "128": "icons/logo.png"
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
     }
   },
   "options_page": "src/options/index.html",
   "web_accessible_resources": [
     {
-      "resources": ["icons/logo.png"],
+      "resources": ["icons/icon-32.png"],
       "matches": ["<all_urls>"]
     }
   ],
   "icons": {
-    "16": "icons/logo.png",
-    "32": "icons/logo.png",
-    "48": "icons/logo.png",
-    "128": "icons/logo.png"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "commands": {
     "translate-page": {
       "suggested_key": {
         "default": "Alt+T"
       },
-      "description": "翻译整个页面"
+      "description": "Translate the current page"
     }
   }
 }
