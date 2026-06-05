@@ -46,7 +46,7 @@ The extension requests the following permissions solely for its core functionali
 ## 6. Contact
 
 If you have questions about this privacy policy, please open an issue at:
-https://github.com/huangxinghui/translate-extension/issues
+https://github.com/huangxinghui/easy-translate/issues
 
 ## 7. Changes
 

@@ -27,8 +27,8 @@
 ### 1. 下载源码
 
 ```bash
-git clone https://github.com/huangxinghui/translate-extension.git
-cd translate-extension
+git clone https://github.com/huangxinghui/easy-translate.git
+cd easy-translate
 ```
 
 ### 2. 安装依赖
@@ -148,11 +148,11 @@ src/
 
 **Q：为什么翻译 Twitter/X 页面提示「页面没有可翻译的内容」？**
 
-A：Twitter/X 的推文文本使用 `div` 标签包裹，旧版提取器将其视为容器而跳过。已在 [d026cad](https://github.com/huangxinghui/translate-extension/commit/d026cad) 修复，支持通过 `data-testid="tweetText"` 等平台标记识别 div 文本容器。
+A：Twitter/X 的推文文本使用 `div` 标签包裹，旧版提取器将其视为容器而跳过。已在 [d026cad](https://github.com/huangxinghui/easy-translate/commit/d026cad) 修复，支持通过 `data-testid="tweetText"` 等平台标记识别 div 文本容器。
 
 **Q：插件在某些页面报错 "The provided markup is invalid XML"？**
 
-A：XHTML 文档要求 `innerHTML` 传入良构 XML。已在 [d026cad](https://github.com/huangxinghui/translate-extension/commit/d026cad) 修复，将所有 `<img>`、`<br>` 等空元素改为自闭合形式。
+A：XHTML 文档要求 `innerHTML` 传入良构 XML。已在 [d026cad](https://github.com/huangxinghui/easy-translate/commit/d026cad) 修复，将所有 `<img>`、`<br>` 等空元素改为自闭合形式。
 
 **Q：支持 Firefox / Safari 吗？**
 

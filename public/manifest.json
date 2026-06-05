@@ -6,7 +6,7 @@
   "author": {
     "email": "huang.x.hui@gmail.com"
   },
-  "homepage_url": "https://github.com/huangxinghui/translate-extension",
+  "homepage_url": "https://github.com/huangxinghui/easy-translate",
   "permissions": [
     "storage",
     "activeTab",
