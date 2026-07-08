@@ -6,15 +6,8 @@
   "author": {
     "email": "huang.x.hui@gmail.com"
   },
-  "homepage_url": "https://github.com/huangxinghui/easy-translate",
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

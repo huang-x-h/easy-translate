@@ -31,8 +31,16 @@ class ContentScript {
     document.addEventListener('keydown', this.handleKeyDown.bind(this));
   }
 
-  private handleTextSelection(_event: MouseEvent): void {
+  private handleTextSelection(event: MouseEvent): void {
+    if (this.selectionPopup.containsNode(event.target as Node | null)) {
+      return;
+    }
+
     const selection = window.getSelection();
+    if (selection?.anchorNode && this.selectionPopup.containsNode(selection.anchorNode)) {
+      return;
+    }
+
     const selectedText = selection?.toString().trim();
 
     if (selectedText && selectedText.length > 0) {

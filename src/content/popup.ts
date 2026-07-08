@@ -1,11 +1,17 @@
 import { TranslationAPI } from '../shared/api';
 import { StorageManager } from '../shared/storage';
 
+interface PronunciationInfo {
+  phonetic: string;
+  audioUrl?: string;
+}
+
 export class SelectionPopup {
   private floatingButton: HTMLElement | null = null;
   private popup: HTMLElement | null = null;
   private currentText: string = '';
   private currentTranslation: string = '';
+  private currentPronunciationAudio: string = '';
   private isTranslating: boolean = false;
   private selectionRect: DOMRect | null = null;
 
@@ -104,6 +110,7 @@ export class SelectionPopup {
 
     this.currentText = text;
     this.currentTranslation = '';
+    this.currentPronunciationAudio = '';
     this.selectionRect = rect;
     this.hidePopup();
 
@@ -129,6 +136,15 @@ export class SelectionPopup {
     this.popup.style.display = 'none';
     this.popup.style.opacity = '0';
     this.isTranslating = false;
+  }
+
+  public containsNode(node: Node | null): boolean {
+    if (!node) return false;
+
+    return Boolean(
+      this.popup?.contains(node) ||
+      this.floatingButton?.contains(node)
+    );
   }
 
   private async showPopup(): Promise<void> {
@@ -251,9 +267,11 @@ export class SelectionPopup {
         return;
       }
 
+      const pronunciationPromise = this.getPronunciationForSelection(this.currentText);
       const cached = await StorageManager.getCachedTranslation(this.currentText, config.targetLang);
       if (cached) {
         this.showResult(cached);
+        this.renderPronunciationWhenReady(pronunciationPromise);
         return;
       }
 
@@ -267,22 +285,29 @@ export class SelectionPopup {
         this.showError(result.error);
       } else {
         this.showResult(result.translatedText);
+        this.renderPronunciationWhenReady(pronunciationPromise);
         await StorageManager.setCachedTranslation(this.currentText, result.translatedText, config.targetLang);
       }
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : 'Translation failed');
+      if (this.isExtensionContextInvalidated(error)) {
+        this.showExtensionContextInvalidated();
+      } else {
+        this.showError(error instanceof Error ? error.message : 'Translation failed');
+      }
     } finally {
       this.isTranslating = false;
     }
   }
 
-  private showResult(text: string): void {
+  private showResult(text: string, pronunciation?: PronunciationInfo | null): void {
     if (!this.popup) return;
 
     this.currentTranslation = text;
+    this.currentPronunciationAudio = pronunciation?.audioUrl || '';
     this.replacePopupBody(`
       <div class="translation-result-container">
         <div id="immersive-translate-original" class="immersive-translate-original-text">${this.escapeHtml(this.currentText)}</div>
+        ${this.renderPronunciation(pronunciation)}
         <div id="immersive-translate-result" class="immersive-translate-result-text">${this.escapeHtml(text)}</div>
         <div class="immersive-translate-actions">
           <button id="btn-copy" class="immersive-translate-action-button" type="button">&#x590d;&#x5236;&#x8bd1;&#x6587;</button>
@@ -292,6 +317,102 @@ export class SelectionPopup {
     `);
     this.popup.querySelector('#btn-copy')?.addEventListener('click', () => this.copyTranslation());
     this.popup.querySelector('#btn-swap')?.addEventListener('click', () => this.swapLanguages());
+    this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
+  }
+
+  private async renderPronunciationWhenReady(pronunciationPromise: Promise<PronunciationInfo | null>): Promise<void> {
+    const pronunciation = await pronunciationPromise;
+    if (!pronunciation || !this.popup || this.popup.style.display === 'none') return;
+
+    const original = this.popup.querySelector('#immersive-translate-original');
+    if (!original || this.popup.querySelector('.immersive-translate-pronunciation')) return;
+
+    this.currentPronunciationAudio = pronunciation.audioUrl || '';
+    original.insertAdjacentHTML('afterend', this.renderPronunciation(pronunciation));
+    this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
+  }
+
+  private renderPronunciation(pronunciation?: PronunciationInfo | null): string {
+    if (!pronunciation?.phonetic) return '';
+
+    const audioButton = pronunciation.audioUrl
+      ? `<button id="btn-pronunciation-audio" class="immersive-translate-pronunciation-audio" type="button" title="Play pronunciation" aria-label="Play pronunciation">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+            <path d="M16 8.5c1.2 1 2 2.1 2 3.5s-.8 2.6-2 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>`
+      : '';
+
+    return `
+      <div class="immersive-translate-pronunciation">
+        <span class="immersive-translate-pronunciation-label">&#x8bfb;&#x97f3;</span>
+        <span class="immersive-translate-pronunciation-text">${this.escapeHtml(pronunciation.phonetic)}</span>
+        ${audioButton}
+      </div>
+    `;
+  }
+
+  private async getPronunciationForSelection(text: string): Promise<PronunciationInfo | null> {
+    const word = this.getSingleLatinWord(text);
+    if (!word) return null;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 2500);
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, {
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeoutId);
+
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (!Array.isArray(data) || !data[0]) return null;
+
+      return this.extractPronunciation(data[0]);
+    } catch {
+      return null;
+    }
+  }
+
+  private getSingleLatinWord(text: string): string | null {
+    const trimmed = text.trim();
+    if (!/^[A-Za-z]+(?:[-'][A-Za-z]+)*$/.test(trimmed)) {
+      return null;
+    }
+
+    return trimmed.toLowerCase();
+  }
+
+  private extractPronunciation(entry: unknown): PronunciationInfo | null {
+    if (!entry || typeof entry !== 'object') return null;
+
+    const dictionaryEntry = entry as {
+      phonetic?: unknown;
+      phonetics?: Array<{ text?: unknown; audio?: unknown }>;
+    };
+    const phonetics = Array.isArray(dictionaryEntry.phonetics) ? dictionaryEntry.phonetics : [];
+    const phonetic = this.asNonEmptyString(dictionaryEntry.phonetic)
+      || this.asNonEmptyString(phonetics.find(item => this.asNonEmptyString(item.text))?.text);
+
+    if (!phonetic) return null;
+
+    const audioUrl = this.asNonEmptyString(phonetics.find(item => this.asNonEmptyString(item.audio))?.audio);
+    return { phonetic, audioUrl: audioUrl || undefined };
+  }
+
+  private asNonEmptyString(value: unknown): string {
+    return typeof value === 'string' && value.trim() ? value.trim() : '';
+  }
+
+  private playPronunciationAudio(): void {
+    if (!this.currentPronunciationAudio) return;
+
+    const audio = new Audio(this.currentPronunciationAudio);
+    audio.play().catch(error => {
+      console.error('Failed to play pronunciation:', error);
+    });
   }
 
   private showError(message: string): void {
@@ -302,6 +423,28 @@ export class SelectionPopup {
         </div>
       </div>
     `);
+  }
+
+  private showExtensionContextInvalidated(): void {
+    this.replacePopupBody(`
+      <div class="immersive-translate-error">
+        <div class="immersive-translate-error-text">
+          &#x6269;&#x5c55;&#x5df2;&#x91cd;&#x65b0;&#x52a0;&#x8f7d;&#x3002;<br /><br />&#x8bf7;&#x5237;&#x65b0;&#x5f53;&#x524d;&#x9875;&#x9762;&#x540e;&#x91cd;&#x8bd5;&#x3002;
+        </div>
+      </div>
+    `);
+  }
+
+  private isExtensionContextInvalidated(error: unknown): boolean {
+    return this.getErrorMessage(error).includes('Extension context invalidated');
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error && typeof error === 'object' && 'message' in error) {
+      return String((error as { message: unknown }).message);
+    }
+
+    return String(error);
   }
 
   private async copyTranslation(): Promise<void> {
