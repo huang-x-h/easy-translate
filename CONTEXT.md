@@ -8,6 +8,9 @@
 |------|------------|-------|
 | **Selection Translation** | User selects text on a page, extension shows translation in a floating popup | Triggered by text selection, non-intrusive |
 | **Bilingual Translation** | Translates entire page and displays original + translated text side-by-side | Uses paragraph-by-paragraph layout |
+| **Vocabulary Book (生词本)** | User-saved entries of selection translations, viewable and exportable from the options page | Per-target-language dedup keyed on normalized original text |
+| **Daily Review (每日复习)** | Flashcard session over today's saved entries with self-rated recall (unknown/fuzzy/known) | Tracked via `lastReviewedAt` and `reviewCount` on each entry; audio auto-plays on each new card |
+| **Pronunciation Enrichment** | Async lookup against dictionaryapi.dev to backfill missing phonetic/audio on vocabulary entries | Fires from the popup after save when no pronunciation is present; idempotent |
 | **Content Script** | JavaScript injected into web pages to read/modify DOM | Isolated from page scripts via Shadow DOM |
 | **Service Worker** | Background script in Manifest V3, handles API calls and storage | Event-driven, not persistent |
 | **Readability** | Algorithm to extract main article content from web pages | Based on Mozilla's Readability library |
@@ -20,6 +23,9 @@
 | **Streaming Response** | Server sends partial translation results progressively | Better UX for real-time feedback |
 | **Batch Translation** | Sending multiple paragraphs for parallel translation | Efficient for full-page translation |
 | **Translation Cache** | Local storage of translated text keyed by content hash | Reduces API calls, 7-day TTL |
+| **Vocabulary Entry** | Saved selection with original, translation, pronunciation, audio, source URL, notes | Keyed by `vocab_<hash(original + targetLang)>`; one index array tracks ids |
+| **Today's Entries** | Subset of vocabulary entries where `createdAt >= today 0:00 local` | Powers the daily review queue; re-computed on each options page open |
+| **Pronunciation Lookup** | dictionaryapi.dev `/v2/entries/en/<word>` returns phonetic + optional audio URL | Skipped for non-English text or entries that already have pronunciation |
 
 ### UI Components
 
@@ -52,6 +58,7 @@
 - PDF translation (web pages only)
 - Real-time chat translation (not a chat extension)
 - Image OCR translation (text content only)
+- Cloud sync of vocabulary (stored locally only; export to JSON/CSV for portability)
 
 ## Related Systems
 

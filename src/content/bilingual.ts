@@ -218,7 +218,8 @@ export class BilingualTranslator {
         this.clearHighlight();
 
         // Check cache first
-        let translatedText: string | null = await StorageManager.getCachedTranslation(para.text, config.targetLang);
+        const cached = await StorageManager.getCachedTranslation(para.text, config.targetLang);
+        let translatedText: string | null = cached?.translatedText ?? null;
 
         if (!translatedText) {
           // Highlight current paragraph being translated
@@ -235,7 +236,8 @@ export class BilingualTranslator {
             translatedText = `[翻译失败] ${para.text.substring(0, 50)}...`;
           } else {
             translatedText = result.translatedText;
-            // Cache the result
+            // Cache the result. Whole-paragraph text never has meaningful
+            // pronunciation, so we don't bother storing it.
             await StorageManager.setCachedTranslation(para.text, translatedText, config.targetLang);
           }
         }

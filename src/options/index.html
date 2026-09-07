@@ -57,6 +57,7 @@
     .test-result.error { background: #fee2e2; color: #991b1b; }
     .test-result.loading { background: #dbeafe; color: #1e40af; }
   </style>
+  <link rel="stylesheet" href="./vocabulary.css" />
 </head>
 <body>
   <div class="container">
@@ -122,6 +123,129 @@
       <div id="testResult" class="test-result" style="display: none;"></div>
     </div>
     
+    <div class="card" id="vocabularyCard">
+      <div class="vocab-header">
+        <div>
+          <h1>&#x751f;&#x8bcd;&#x672c;</h1>
+          <p class="subtitle vocab-summary">
+            <span id="vocabSummary">&#x8fd8;&#x6ca1;&#x6709;&#x4fdd;&#x5b58;&#x7684;&#x8bcd;&#x6761;</span>
+          </p>
+        </div>
+        <div class="vocab-header-actions">
+          <button class="btn btn-secondary" id="vocabClearAllBtn" type="button">&#x6e05;&#x7a7a;&#x751f;&#x8bcd;&#x672c;</button>
+        </div>
+      </div>
+
+      <div class="vocab-toolbar">
+        <input
+          type="search"
+          id="vocabSearch"
+          class="vocab-search"
+          placeholder="&#x641c;&#x7d22;&#x539f;&#x6587;&#x6216;&#x8bd1;&#x6587;"
+          autocomplete="off"
+        />
+        <div class="vocab-toolbar-actions">
+          <button class="btn btn-secondary" id="vocabExportJsonBtn" type="button" disabled>&#x5bfc;&#x51fa; JSON</button>
+          <button class="btn btn-secondary" id="vocabExportCsvBtn" type="button" disabled>&#x5bfc;&#x51fa; CSV</button>
+        </div>
+      </div>
+
+      <div class="vocab-review-banner" id="vocabReviewBanner" hidden>
+        <div class="vocab-review-banner-info">
+          <strong><span aria-hidden="true">&#x1f4c5;</span> &#x4eca;&#x65e5;&#x65b0;&#x8bcd; <span id="vocabTodayCount">0</span> &#x4e2a;</strong>
+          <span class="vocab-review-banner-hint">&#x6e29;&#x4e60;&#x4eca;&#x5929;&#x52a0;&#x5165;&#x751f;&#x8bcd;&#x672c;&#x7684;&#x8bcd;&#x6761;</span>
+        </div>
+        <button class="btn btn-primary" id="vocabStartReviewBtn" type="button">&#x5f00;&#x59cb;&#x590d;&#x4e60;</button>
+      </div>
+
+      <div class="vocab-backfill-banner" id="vocabBackfillBanner" hidden>
+        <div class="vocab-backfill-info">
+          <strong><span aria-hidden="true">&#x1f50e;</span> <span id="vocabBackfillCount">0</span> &#x4e2a;&#x8bcd;&#x6761;&#x7f3a;&#x5c11;&#x97f3;&#x6807;</strong>
+          <span class="vocab-backfill-hint">&#x4f7f;&#x7528; LLM &#x91cd;&#x65b0;&#x751f;&#x6210;&#xff0c;&#x8986;&#x76d6;&#x66f4;&#x5e7f;&#x3001;&#x66f4;&#x51c6;&#x786e;&#x7684;&#x8bfb;&#x97f3;</span>
+        </div>
+        <button class="btn btn-primary" id="vocabBackfillBtn" type="button">&#x4e00;&#x952e;&#x8865;&#x5168;</button>
+        <div class="vocab-backfill-progress" id="vocabBackfillProgress" hidden>
+          <div class="vocab-backfill-progress-bar"><div class="vocab-backfill-progress-fill" id="vocabBackfillProgressFill"></div></div>
+          <span id="vocabBackfillProgressText">0 / 0</span>
+          <button class="btn btn-secondary vocab-backfill-cancel" id="vocabBackfillCancelBtn" type="button">&#x53d6;&#x6d88;</button>
+        </div>
+        <div class="vocab-backfill-result" id="vocabBackfillResult" hidden></div>
+      </div>
+
+      <div id="vocabList" class="vocab-list" role="list"></div>
+      <div id="vocabEmpty" class="vocab-empty">
+        <p>&#x9009;&#x4e2d;&#x9875;&#x9762;&#x4e0a;&#x7684;&#x5355;&#x8bcd;&#x6216;&#x6587;&#x672c;&#x4e4b;&#x540e;&#xff0c;&#x70b9;&#x51fb;&#x6d6e;&#x52a8;&#x6309;&#x94ae;&#x5e76;&#x5728;&#x5f39;&#x7a97;&#x4e2d;&#x70b9;&#x201c;&#x52a0;&#x5165;&#x751f;&#x8bcd;&#x672c;&#x201d;&#x5373;&#x53ef;&#x4fdd;&#x5b58;&#x5230;&#x8fd9;&#x91cc;&#x3002;</p>
+      </div>
+
+      <div class="vocab-review-panel" id="vocabReviewPanel" hidden>
+        <div class="vocab-review-header">
+          <button class="vocab-back-btn" id="vocabReviewBackBtn" type="button">&#x2190; &#x8fd4;&#x56de;&#x751f;&#x8bcd;&#x672c;</button>
+          <div class="vocab-review-progress">
+            <span id="vocabReviewProgressText">0 / 0</span>
+            <div class="vocab-review-progress-bar"><div class="vocab-review-progress-fill" id="vocabReviewProgressFill"></div></div>
+          </div>
+        </div>
+
+        <div class="vocab-review-card" id="vocabReviewCard">
+          <div class="vocab-review-prompt" id="vocabReviewPrompt">&#x8bb0;&#x5f97;&#x8fd9;&#x4e2a;&#x8bcd;&#x5417;&#xff1f;</div>
+          <div class="vocab-review-original-row">
+            <div class="vocab-review-original" id="vocabReviewOriginal"></div>
+            <button class="vocab-review-audio" id="vocabReviewAudioBtn" type="button" hidden title="&#x542c;&#x53d1;&#x97f3;" aria-label="Play pronunciation">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="M16 8.5c1.2 1 2 2.1 2 3.5s-.8 2.6-2 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <button class="vocab-review-reveal" id="vocabReviewRevealBtn" type="button">&#x663e;&#x793a;&#x7b54;&#x6848;</button>
+          <div class="vocab-review-answer" id="vocabReviewAnswer" hidden>
+            <div class="vocab-review-translation" id="vocabReviewTranslation"></div>
+            <div class="vocab-review-pronunciation" id="vocabReviewPronunciation"></div>
+            <div class="vocab-review-source" id="vocabReviewSource"></div>
+          </div>
+        </div>
+
+        <div class="vocab-review-actions">
+          <button class="vocab-review-rating vocab-review-rating--unknown" id="vocabReviewRateUnknown" data-rating="unknown" type="button">
+            <span class="vocab-review-rating-label">&#x4e0d;&#x8ba4;&#x8bc6;</span>
+          </button>
+          <button class="vocab-review-rating vocab-review-rating--fuzzy" id="vocabReviewRateFuzzy" data-rating="fuzzy" type="button">
+            <span class="vocab-review-rating-label">&#x6a21;&#x7cca;</span>
+          </button>
+          <button class="vocab-review-rating vocab-review-rating--known" id="vocabReviewRateKnown" data-rating="known" type="button">
+            <span class="vocab-review-rating-label">&#x8ba4;&#x8bc6;</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="vocab-review-summary" id="vocabReviewSummary" hidden>
+        <div class="vocab-review-summary-icon" aria-hidden="true">&#x1f389;</div>
+        <h2>&#x4eca;&#x65e5;&#x590d;&#x4e60;&#x5b8c;&#x6210;&#xff01;</h2>
+        <div class="vocab-review-summary-stats">
+          <div class="vocab-review-stat">
+            <strong id="vocabReviewSummaryTotal">0</strong>
+            <span>&#x672c;&#x8f6e;&#x603b;&#x6570;</span>
+          </div>
+          <div class="vocab-review-stat vocab-review-stat--known">
+            <strong id="vocabReviewSummaryKnown">0</strong>
+            <span>&#x8ba4;&#x8bc6;</span>
+          </div>
+          <div class="vocab-review-stat vocab-review-stat--fuzzy">
+            <strong id="vocabReviewSummaryFuzzy">0</strong>
+            <span>&#x6a21;&#x7cca;</span>
+          </div>
+          <div class="vocab-review-stat vocab-review-stat--unknown">
+            <strong id="vocabReviewSummaryUnknown">0</strong>
+            <span>&#x4e0d;&#x8ba4;&#x8bc6;</span>
+          </div>
+        </div>
+        <div class="vocab-review-summary-actions">
+          <button class="btn btn-secondary" id="vocabReviewAgainBtn" type="button">&#x518d;&#x6765;&#x4e00;&#x8f6e;</button>
+          <button class="btn btn-primary" id="vocabReviewDoneBtn" type="button">&#x8fd4;&#x56de;&#x751f;&#x8bcd;&#x672c;</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>使用说明</h2>
       <div style="font-size: 14px; color: #4b5563; line-height: 1.8;">

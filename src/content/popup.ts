@@ -1,19 +1,19 @@
 import { TranslationAPI } from '../shared/api';
 import { StorageManager } from '../shared/storage';
-
-interface PronunciationInfo {
-  phonetic: string;
-  audioUrl?: string;
-}
+import { DictionaryAPI, VocabularyManager } from '../shared/vocabulary';
+import { PronunciationInfo } from '../shared/types';
 
 export class SelectionPopup {
   private floatingButton: HTMLElement | null = null;
   private popup: HTMLElement | null = null;
   private currentText: string = '';
   private currentTranslation: string = '';
+  private currentPronunciation: PronunciationInfo | null = null;
   private currentPronunciationAudio: string = '';
   private isTranslating: boolean = false;
+  private isSavedToVocabulary: boolean = false;
   private selectionRect: DOMRect | null = null;
+  private vocabFeedbackTimer: number | null = null;
 
   constructor() {
     this.createFloatingButton();
@@ -110,7 +110,9 @@ export class SelectionPopup {
 
     this.currentText = text;
     this.currentTranslation = '';
+    this.currentPronunciation = null;
     this.currentPronunciationAudio = '';
+    this.isSavedToVocabulary = false;
     this.selectionRect = rect;
     this.hidePopup();
 
@@ -267,11 +269,15 @@ export class SelectionPopup {
         return;
       }
 
-      const pronunciationPromise = this.getPronunciationForSelection(this.currentText);
       const cached = await StorageManager.getCachedTranslation(this.currentText, config.targetLang);
       if (cached) {
-        this.showResult(cached);
-        this.renderPronunciationWhenReady(pronunciationPromise);
+        const pronunciation = cached.pronunciation
+          ? { phonetic: cached.pronunciation, audioUrl: undefined }
+          : null;
+        this.showResult(cached.translatedText, pronunciation);
+        if (pronunciation) {
+          void this.attachAudioFallback();
+        }
         return;
       }
 
@@ -284,9 +290,21 @@ export class SelectionPopup {
       if (result.error) {
         this.showError(result.error);
       } else {
-        this.showResult(result.translatedText);
-        this.renderPronunciationWhenReady(pronunciationPromise);
-        await StorageManager.setCachedTranslation(this.currentText, result.translatedText, config.targetLang);
+        const pronunciation = result.pronunciation
+          ? { phonetic: result.pronunciation, audioUrl: undefined }
+          : null;
+        this.showResult(result.translatedText, pronunciation);
+        await StorageManager.setCachedTranslation(
+          this.currentText,
+          result.translatedText,
+          config.targetLang,
+          result.pronunciation,
+        );
+        // LLM 只给 IPA、不给音频。LLM 认为这是单词（给出了音标）
+        // 时才去字典 API 补一个音频按钮，避免不必要的请求。
+        if (pronunciation) {
+          void this.attachAudioFallback();
+        }
       }
     } catch (error) {
       if (this.isExtensionContextInvalidated(error)) {
@@ -299,11 +317,14 @@ export class SelectionPopup {
     }
   }
 
-  private showResult(text: string, pronunciation?: PronunciationInfo | null): void {
+  private async showResult(text: string, pronunciation?: PronunciationInfo | null): Promise<void> {
     if (!this.popup) return;
 
     this.currentTranslation = text;
-    this.currentPronunciationAudio = pronunciation?.audioUrl || '';
+    if (pronunciation) {
+      this.currentPronunciation = pronunciation;
+      this.currentPronunciationAudio = pronunciation.audioUrl || '';
+    }
     this.replacePopupBody(`
       <div class="translation-result-container">
         <div id="immersive-translate-original" class="immersive-translate-original-text">${this.escapeHtml(this.currentText)}</div>
@@ -312,98 +333,199 @@ export class SelectionPopup {
         <div class="immersive-translate-actions">
           <button id="btn-copy" class="immersive-translate-action-button" type="button">&#x590d;&#x5236;&#x8bd1;&#x6587;</button>
           <button id="btn-swap" class="immersive-translate-action-button" type="button">&#x4ea4;&#x6362;</button>
+          <button id="btn-vocab" class="immersive-translate-action-button immersive-translate-action-button--vocab" type="button" data-state="unsaved">
+            <span class="immersive-translate-action-icon" aria-hidden="true">&#x2b50;</span>
+            <span class="immersive-translate-action-label">&#x52a0;&#x5165;&#x751f;&#x8bcd;&#x672c;</span>
+          </button>
         </div>
+        <div id="immersive-translate-vocab-feedback" class="immersive-translate-vocab-feedback" aria-live="polite"></div>
       </div>
     `);
     this.popup.querySelector('#btn-copy')?.addEventListener('click', () => this.copyTranslation());
     this.popup.querySelector('#btn-swap')?.addEventListener('click', () => this.swapLanguages());
+    this.popup.querySelector('#btn-vocab')?.addEventListener('click', () => this.toggleVocabulary());
     this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
+
+    await this.refreshVocabularyState();
   }
 
-  private async renderPronunciationWhenReady(pronunciationPromise: Promise<PronunciationInfo | null>): Promise<void> {
-    const pronunciation = await pronunciationPromise;
-    if (!pronunciation || !this.popup || this.popup.style.display === 'none') return;
+  private async refreshVocabularyState(): Promise<void> {
+    if (!this.popup) return;
+    const config = await StorageManager.getConfig();
+    const saved = await VocabularyManager.hasEntry(this.currentText, config.targetLang);
+    this.isSavedToVocabulary = saved;
+    this.applyVocabularyButtonState();
+  }
 
-    const original = this.popup.querySelector('#immersive-translate-original');
-    if (!original || this.popup.querySelector('.immersive-translate-pronunciation')) return;
+  private applyVocabularyButtonState(): void {
+    if (!this.popup) return;
+    const button = this.popup.querySelector<HTMLButtonElement>('#btn-vocab');
+    if (!button) return;
 
-    this.currentPronunciationAudio = pronunciation.audioUrl || '';
-    original.insertAdjacentHTML('afterend', this.renderPronunciation(pronunciation));
+    const icon = button.querySelector('.immersive-translate-action-icon');
+    const label = button.querySelector('.immersive-translate-action-label');
+    if (this.isSavedToVocabulary) {
+      button.dataset.state = 'saved';
+      button.classList.add('is-saved');
+      button.title = '\u5df2\u52a0\u5165\u751f\u8bcd\u672c\uff0c\u70b9\u51fb\u53d6\u6d88';
+      if (icon) icon.innerHTML = '&#x2713;';
+      if (label) label.textContent = '\u5df2\u52a0\u5165';
+    } else {
+      button.dataset.state = 'unsaved';
+      button.classList.remove('is-saved');
+      button.title = '\u52a0\u5165\u751f\u8bcd\u672c';
+      if (icon) icon.innerHTML = '&#x2b50;';
+      if (label) label.textContent = '\u52a0\u5165\u751f\u8bcd\u672c';
+    }
+  }
+
+  private showVocabularyFeedback(message: string, tone: 'success' | 'info' = 'success'): void {
+    if (!this.popup) return;
+    const feedback = this.popup.querySelector<HTMLElement>('#immersive-translate-vocab-feedback');
+    if (!feedback) return;
+
+    feedback.textContent = message;
+    feedback.dataset.tone = tone;
+    feedback.classList.add('is-visible');
+
+    if (this.vocabFeedbackTimer !== null) {
+      window.clearTimeout(this.vocabFeedbackTimer);
+    }
+    this.vocabFeedbackTimer = window.setTimeout(() => {
+      feedback.classList.remove('is-visible');
+      this.vocabFeedbackTimer = null;
+    }, 1800);
+  }
+
+  private async toggleVocabulary(): Promise<void> {
+    if (!this.popup) return;
+
+    const config = await StorageManager.getConfig();
+    if (!config.targetLang) {
+      this.showVocabularyFeedback('\u672a\u77e5\u76ee\u6807\u8bed\u8a00', 'info');
+      return;
+    }
+
+    const button = this.popup.querySelector<HTMLButtonElement>('#btn-vocab');
+    if (button) button.disabled = true;
+
+    try {
+      if (this.isSavedToVocabulary) {
+        const id = this.computeVocabId(this.currentText, config.targetLang);
+        await VocabularyManager.removeEntry(id);
+        this.isSavedToVocabulary = false;
+        this.applyVocabularyButtonState();
+        this.showVocabularyFeedback('\u5df2\u4ece\u751f\u8bcd\u672c\u79fb\u9664', 'info');
+      } else {
+        const saved = await VocabularyManager.saveEntry({
+          originalText: this.currentText,
+          translation: this.currentTranslation,
+          targetLang: config.targetLang,
+          pronunciation: this.currentPronunciation?.phonetic,
+          audioUrl: this.currentPronunciation?.audioUrl,
+          sourceUrl: window.location.href,
+          sourceTitle: document.title,
+        });
+        this.isSavedToVocabulary = true;
+        this.applyVocabularyButtonState();
+        this.showVocabularyFeedback('\u5df2\u52a0\u5165\u751f\u8bcd\u672c', 'success');
+
+        // 后台补全音标：保存时如果还没拿到，异步去 dictionaryapi.dev 查一次，
+        // 下次再保存同一文本（或者在生词本/复习面板里查看）时就能看到读音。
+        if (!saved.pronunciation) {
+          void VocabularyManager.enrichWithPronunciation(saved.id);
+        }
+      }
+    } catch (error) {
+      this.showVocabularyFeedback(
+        error instanceof Error ? error.message : '\u4fdd\u5b58\u5931\u8d25',
+        'info',
+      );
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  private computeVocabId(text: string, targetLang: string): string {
+    const normalized = text.trim().toLowerCase();
+    const str = `${normalized}::${targetLang}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return `vocab_${hash >>> 0}`;
+  }
+
+  private async attachAudioFallback(): Promise<void> {
+    // LLM 只给 IPA、不给音频 URL。这里仅作为“发音按钮”存在的兑底
+    // ——如果字典查得到 audio，就插一个播放按钮；查不到也不影响音标文本。
+    if (!DictionaryAPI.isLookupableWord(this.currentText)) return;
+    if (!this.popup || this.popup.style.display === 'none') return;
+
+    let info: PronunciationInfo | null;
+    try {
+      info = await DictionaryAPI.fetchPronunciation(this.currentText);
+    } catch {
+      return;
+    }
+    if (!info?.audioUrl) return;
+    if (!this.popup || this.popup.style.display === 'none') return;
+
+    this.currentPronunciationAudio = info.audioUrl;
+    // Dict 可能给出不同于 LLM 的 IPA（例如变体读音）。这里仅补 audio，
+    // 不覆盖 LLM 的 phonetic，避免保存后两个读音打架。
+    if (info.phonetic && !this.currentPronunciation) {
+      this.currentPronunciation = { phonetic: info.phonetic, audioUrl: info.audioUrl };
+    }
+
+    const pronunciationEl = this.popup.querySelector('.immersive-translate-pronunciation');
+    if (!pronunciationEl || pronunciationEl.querySelector('#btn-pronunciation-audio')) return;
+
+    pronunciationEl.insertAdjacentHTML('beforeend', this.renderAudioButton());
     this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
+
+    // 保存生词后才到这里——补上 audioUrl。
+    if (this.isSavedToVocabulary) {
+      try {
+        const config = await StorageManager.getConfig();
+        await VocabularyManager.saveEntry({
+          originalText: this.currentText,
+          translation: this.currentTranslation,
+          targetLang: config.targetLang,
+          pronunciation: this.currentPronunciation?.phonetic,
+          audioUrl: info.audioUrl,
+        });
+      } catch (error) {
+        console.error('[EasyTranslate] failed to enrich saved entry with audioUrl', error);
+      }
+    }
   }
 
   private renderPronunciation(pronunciation?: PronunciationInfo | null): string {
     if (!pronunciation?.phonetic) return '';
 
-    const audioButton = pronunciation.audioUrl
-      ? `<button id="btn-pronunciation-audio" class="immersive-translate-pronunciation-audio" type="button" title="Play pronunciation" aria-label="Play pronunciation">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
-            <path d="M16 8.5c1.2 1 2 2.1 2 3.5s-.8 2.6-2 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>`
-      : '';
-
+    // The audio button is intentionally NOT rendered here — the LLM only
+    // gives us IPA, not an audio URL. `attachAudioFallback` injects the
+    // button later if dictionaryapi.dev has an audio file for this word.
     return `
       <div class="immersive-translate-pronunciation">
         <span class="immersive-translate-pronunciation-label">&#x8bfb;&#x97f3;</span>
         <span class="immersive-translate-pronunciation-text">${this.escapeHtml(pronunciation.phonetic)}</span>
-        ${audioButton}
       </div>
     `;
   }
 
-  private async getPronunciationForSelection(text: string): Promise<PronunciationInfo | null> {
-    const word = this.getSingleLatinWord(text);
-    if (!word) return null;
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 2500);
-      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, {
-        signal: controller.signal,
-      });
-      window.clearTimeout(timeoutId);
-
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      if (!Array.isArray(data) || !data[0]) return null;
-
-      return this.extractPronunciation(data[0]);
-    } catch {
-      return null;
-    }
-  }
-
-  private getSingleLatinWord(text: string): string | null {
-    const trimmed = text.trim();
-    if (!/^[A-Za-z]+(?:[-'][A-Za-z]+)*$/.test(trimmed)) {
-      return null;
-    }
-
-    return trimmed.toLowerCase();
-  }
-
-  private extractPronunciation(entry: unknown): PronunciationInfo | null {
-    if (!entry || typeof entry !== 'object') return null;
-
-    const dictionaryEntry = entry as {
-      phonetic?: unknown;
-      phonetics?: Array<{ text?: unknown; audio?: unknown }>;
-    };
-    const phonetics = Array.isArray(dictionaryEntry.phonetics) ? dictionaryEntry.phonetics : [];
-    const phonetic = this.asNonEmptyString(dictionaryEntry.phonetic)
-      || this.asNonEmptyString(phonetics.find(item => this.asNonEmptyString(item.text))?.text);
-
-    if (!phonetic) return null;
-
-    const audioUrl = this.asNonEmptyString(phonetics.find(item => this.asNonEmptyString(item.audio))?.audio);
-    return { phonetic, audioUrl: audioUrl || undefined };
-  }
-
-  private asNonEmptyString(value: unknown): string {
-    return typeof value === 'string' && value.trim() ? value.trim() : '';
+  private renderAudioButton(): string {
+    return `
+      <button id="btn-pronunciation-audio" class="immersive-translate-pronunciation-audio" type="button" title="Play pronunciation" aria-label="Play pronunciation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+          <path d="M16 8.5c1.2 1 2 2.1 2 3.5s-.8 2.6-2 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    `;
   }
 
   private playPronunciationAudio(): void {

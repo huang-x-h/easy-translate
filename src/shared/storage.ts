@@ -12,7 +12,10 @@ export class StorageManager {
   }
 
   // Cache methods
-  static async getCachedTranslation(text: string, targetLang: string): Promise<string | null> {
+  static async getCachedTranslation(
+    text: string,
+    targetLang: string,
+  ): Promise<{ translatedText: string; pronunciation?: string } | null> {
     const cacheKey = this.generateCacheKey(text, targetLang);
     const result = await chrome.storage.local.get(cacheKey);
     const entry: CacheEntry | undefined = result[cacheKey];
@@ -27,14 +30,23 @@ export class StorageManager {
       return null;
     }
 
-    return entry.translatedText;
+    return {
+      translatedText: entry.translatedText,
+      pronunciation: entry.pronunciation,
+    };
   }
 
-  static async setCachedTranslation(text: string, translatedText: string, targetLang: string): Promise<void> {
+  static async setCachedTranslation(
+    text: string,
+    translatedText: string,
+    targetLang: string,
+    pronunciation?: string,
+  ): Promise<void> {
     const cacheKey = this.generateCacheKey(text, targetLang);
     const entry: CacheEntry = {
       originalText: text,
       translatedText,
+      pronunciation,
       timestamp: Date.now(),
       targetLang,
     };

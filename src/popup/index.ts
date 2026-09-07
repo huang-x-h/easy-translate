@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const translateBtn = document.getElementById('translateBtn') as HTMLButtonElement;
   const resetBtn = document.getElementById('resetBtn') as HTMLButtonElement;
   const optionsBtn = document.getElementById('optionsBtn') as HTMLButtonElement;
+  const vocabBtn = document.getElementById('vocabBtn') as HTMLButtonElement;
   const statusEl = document.getElementById('status') as HTMLElement;
   const statusDot = statusEl.querySelector('.status-dot') as HTMLElement;
   const statusText = statusEl.querySelector('.status-text') as HTMLElement;
@@ -88,6 +89,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Options button
   optionsBtn.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
+    window.close();
+  });
+
+  // Vocabulary button — jump straight to the vocabulary card in the
+  // options page. If the options tab is already open we update its URL
+  // (Chrome's openOptionsPage() only focuses existing tabs without
+  // reloading, so the hash wouldn't trigger our scroll handler otherwise).
+  vocabBtn.addEventListener('click', async () => {
+    const optionsUrl = chrome.runtime.getURL('src/options/index.html');
+    const targetUrl = `${optionsUrl}#vocabulary`;
+
+    try {
+      const tabs = await chrome.tabs.query({ url: optionsUrl + '*' });
+      const existing = tabs.find(tab => tab.id !== undefined);
+      if (existing?.id !== undefined) {
+        await chrome.tabs.update(existing.id, { url: targetUrl, active: true });
+        window.close();
+        return;
+      }
+    } catch (error) {
+      console.warn('[EasyTranslate] failed to locate existing options tab', error);
+    }
+
+    // No existing options tab — open a fresh one. tabs.create on the
+    // extension's own URL works without a host permission and won't
+    // trigger a permissions warning prompt.
+    try {
+      await chrome.tabs.create({ url: targetUrl });
+    } catch (error) {
+      console.warn('[EasyTranslate] tabs.create failed, falling back to openOptionsPage', error);
+      chrome.runtime.openOptionsPage();
+    }
     window.close();
   });
 });
