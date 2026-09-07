@@ -207,6 +207,20 @@
   background: #edf1f2 !important;
 }
 
+/* Pulsing highlight while pronunciation is playing — mirrors the style
+ * used in the options page so the user gets visible feedback whether
+ * the source is a recorded mp3 or the browser's speechSynthesis. */
+.immersive-translate-pronunciation-audio.is-playing {
+  background: #4f46e5 !important;
+  color: white !important;
+  animation: imt-pronunciation-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes imt-pronunciation-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
 .immersive-translate-result-text {
   color: #222 !important;
   font-size: 15px !important;

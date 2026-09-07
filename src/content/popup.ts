@@ -2,6 +2,7 @@ import { TranslationAPI } from '../shared/api';
 import { StorageManager } from '../shared/storage';
 import { DictionaryAPI, VocabularyManager } from '../shared/vocabulary';
 import { playPronunciation } from '../shared/speech';
+import { isWordLike } from '../shared/text';
 import { PronunciationInfo } from '../shared/types';
 
 export class SelectionPopup {
@@ -272,7 +273,8 @@ export class SelectionPopup {
 
       const cached = await StorageManager.getCachedTranslation(this.currentText, config.targetLang);
       if (cached) {
-        const pronunciation = cached.pronunciation
+        const showPhonetic = isWordLike(this.currentText);
+        const pronunciation = showPhonetic && cached.pronunciation
           ? { phonetic: cached.pronunciation, audioUrl: undefined }
           : null;
         this.showResult(cached.translatedText, pronunciation);
@@ -291,7 +293,8 @@ export class SelectionPopup {
       if (result.error) {
         this.showError(result.error);
       } else {
-        const pronunciation = result.pronunciation
+        const showPhonetic = isWordLike(this.currentText);
+        const pronunciation = showPhonetic && result.pronunciation
           ? { phonetic: result.pronunciation, audioUrl: undefined }
           : null;
         this.showResult(result.translatedText, pronunciation);
@@ -299,6 +302,8 @@ export class SelectionPopup {
           this.currentText,
           result.translatedText,
           config.targetLang,
+          // Persist the IPA even for non-word inputs so a future
+          // single-word selection of the same string can still use it.
           result.pronunciation,
         );
         // LLM 只给 IPA、不给音频。LLM 认为这是单词（给出了音标）

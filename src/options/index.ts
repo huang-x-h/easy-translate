@@ -3,6 +3,7 @@ import { TranslationConfig, DEFAULT_CONFIG, VocabularyEntry, ReviewRating } from
 import { TranslationAPI } from '../shared/api';
 import { VocabularyManager, BackfillResult } from '../shared/vocabulary';
 import { playPronunciation } from '../shared/speech';
+import { isWordLike } from '../shared/text';
 
 /**
  * Scrolls the vocabulary card into view and pulses a short highlight.
@@ -276,7 +277,7 @@ async function initVocabularyManager(): Promise<void> {
     translation.textContent = entry.translation;
     body.appendChild(translation);
 
-    if (entry.pronunciation || entry.audioUrl) {
+    if ((entry.pronunciation || entry.audioUrl) && isWordLike(entry.originalText)) {
       const pronunciation = document.createElement('div');
       pronunciation.className = 'vocab-item-pronunciation';
       if (entry.pronunciation) {
@@ -498,11 +499,15 @@ async function initVocabularyManager(): Promise<void> {
     reviewOriginalEl.textContent = entry.originalText;
     reviewTranslationEl.textContent = entry.translation;
 
+    // Only show pronunciation UI for single-word / short CJK tokens.
+    // Sentences and phrases never get a phonetic row.
+    const showPhonetic = isWordLike(entry.originalText);
+
     // Independent audio button next to the original word \u2014 visible
     // whenever we can pronounce (phonetic or recording), even before
     // "Show answer" is clicked. Clicking falls back to TTS when there
     // is no recorded audioUrl.
-    if (entry.audioUrl || entry.pronunciation) {
+    if (showPhonetic && (entry.audioUrl || entry.pronunciation)) {
       reviewAudioBtn.hidden = false;
       reviewAudioBtn.dataset.word = entry.originalText;
       if (entry.audioUrl) reviewAudioBtn.dataset.audioUrl = entry.audioUrl;
@@ -514,14 +519,14 @@ async function initVocabularyManager(): Promise<void> {
 
     // Pronunciation (phonetic) shown inside the answer area
     reviewPronunciationEl.innerHTML = '';
-    if (entry.pronunciation) {
+    if (showPhonetic && entry.pronunciation) {
       const text = document.createElement('span');
       text.textContent = entry.pronunciation;
       reviewPronunciationEl.appendChild(text);
     }
     // Horn in the answer area mirrors the one by the original word:
     // shown whenever we can pronounce, with TTS fallback on click.
-    if (entry.pronunciation || entry.audioUrl) {
+    if (showPhonetic && (entry.pronunciation || entry.audioUrl)) {
       const audioBtn = document.createElement('button');
       audioBtn.type = 'button';
       audioBtn.className = 'vocab-item-pronunciation-audio';

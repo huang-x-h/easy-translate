@@ -77,6 +77,29 @@ class BackgroundService {
         await StorageManager.clearCache();
         sendResponse({ success: true });
         break;
+
+      case 'SPEAK':
+        // TTS request from a content script / popup / options page.
+        // We delegate to chrome.tts — a Chrome extension API backed by
+        // the OS speech engine (SAPI 5 on Windows, Google TTS on macOS,
+        // speech-dispatcher on Linux). This bypasses the window.speechSynthesis
+        // API, which is broken in Chrome 130+ (silent speak() with no callbacks).
+        chrome.tts.stop();
+        chrome.tts.speak(
+          message.text,
+          {
+            lang: message.lang ?? 'en-US',
+            rate: message.rate ?? 1.0,
+            enqueue: false,
+          },
+          () => {
+            if (chrome.runtime.lastError) {
+              console.warn('[EasyTranslate] chrome.tts error:', chrome.runtime.lastError.message);
+            }
+          },
+        );
+        sendResponse({ success: true });
+        break;
     }
   }
 

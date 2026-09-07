@@ -6,7 +6,7 @@
   "author": {
     "email": "huang.x.hui@gmail.com"
   },
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "tts"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
