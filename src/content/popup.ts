@@ -1,6 +1,7 @@
 import { TranslationAPI } from '../shared/api';
 import { StorageManager } from '../shared/storage';
 import { DictionaryAPI, VocabularyManager } from '../shared/vocabulary';
+import { playPronunciation } from '../shared/speech';
 import { PronunciationInfo } from '../shared/types';
 
 export class SelectionPopup {
@@ -459,8 +460,9 @@ export class SelectionPopup {
   }
 
   private async attachAudioFallback(): Promise<void> {
-    // LLM 只给 IPA、不给音频 URL。这里仅作为“发音按钮”存在的兑底
-    // ——如果字典查得到 audio，就插一个播放按钮；查不到也不影响音标文本。
+    // LLM 只给 IPA、不给音频 URL。字典 API 能查到真人录音时，把
+    // audioUrl 缓存到 currentPronunciationAudio，让喇叭按钮点击
+    // 时优先播 mp3；查不到也不影响——点击会走 TTS 兜底。
     if (!DictionaryAPI.isLookupableWord(this.currentText)) return;
     if (!this.popup || this.popup.style.display === 'none') return;
 
@@ -479,12 +481,6 @@ export class SelectionPopup {
     if (info.phonetic && !this.currentPronunciation) {
       this.currentPronunciation = { phonetic: info.phonetic, audioUrl: info.audioUrl };
     }
-
-    const pronunciationEl = this.popup.querySelector('.immersive-translate-pronunciation');
-    if (!pronunciationEl || pronunciationEl.querySelector('#btn-pronunciation-audio')) return;
-
-    pronunciationEl.insertAdjacentHTML('beforeend', this.renderAudioButton());
-    this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
 
     // 保存生词后才到这里——补上 audioUrl。
     if (this.isSavedToVocabulary) {
@@ -506,13 +502,15 @@ export class SelectionPopup {
   private renderPronunciation(pronunciation?: PronunciationInfo | null): string {
     if (!pronunciation?.phonetic) return '';
 
-    // The audio button is intentionally NOT rendered here — the LLM only
-    // gives us IPA, not an audio URL. `attachAudioFallback` injects the
-    // button later if dictionaryapi.dev has an audio file for this word.
+    // The horn is always rendered when a phonetic exists. Whether the
+    // click plays a recorded mp3 or falls back to TTS is decided at
+    // click-time by playPronunciation(), which keeps the button
+    // visible even when dictionaryapi.dev has no recording.
     return `
       <div class="immersive-translate-pronunciation">
         <span class="immersive-translate-pronunciation-label">&#x8bfb;&#x97f3;</span>
         <span class="immersive-translate-pronunciation-text">${this.escapeHtml(pronunciation.phonetic)}</span>
+        ${this.renderAudioButton()}
       </div>
     `;
   }
@@ -529,11 +527,12 @@ export class SelectionPopup {
   }
 
   private playPronunciationAudio(): void {
-    if (!this.currentPronunciationAudio) return;
-
-    const audio = new Audio(this.currentPronunciationAudio);
-    audio.play().catch(error => {
-      console.error('Failed to play pronunciation:', error);
+    // Recorded mp3 if we have one, otherwise TTS. The unified helper
+    // reads the word from currentText (the original, not the IPA).
+    playPronunciation({
+      audioUrl: this.currentPronunciationAudio || undefined,
+      word: this.currentText,
+      button: this.popup?.querySelector('#btn-pronunciation-audio') ?? undefined,
     });
   }
 

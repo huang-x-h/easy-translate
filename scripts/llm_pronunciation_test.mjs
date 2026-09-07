@@ -133,10 +133,10 @@ async function selectAndTranslate(document) {
   assert.ok(phoneticEl, 'pronunciation row should render for a single word');
   assert.equal(phoneticEl.textContent, '/ˈæp.əl/', 'phonetic should come from LLM, not the dictionary');
 
-  // Audio button only appears after the dict fallback resolves.
-  await tick(60);
+  // The horn is rendered alongside the phonetic immediately (it no longer
+  // waits for the dict audio fallback — TTS covers the no-recording case).
   const audioBtn = popup.querySelector('#btn-pronunciation-audio');
-  assert.ok(audioBtn, 'audio button should be inserted after dict fallback');
+  assert.ok(audioBtn, 'audio button should render together with the phonetic');
 }
 
 // ---------------------------------------------------------------------------
@@ -325,8 +325,10 @@ async function selectAndTranslate(document) {
 
   const popup = document.querySelector('.immersive-translate-modal');
   assert.ok(popup.querySelector('.immersive-translate-pronunciation-text'), 'LLM phonetic should still render');
-  assert.equal(popup.querySelector('#btn-pronunciation-audio'), null,
-    'audio button should stay absent when dictionary returns 404');
+  // The horn stays visible even without a dict recording — clicking it
+  // falls back to TTS at click-time rather than hiding the affordance.
+  assert.ok(popup.querySelector('#btn-pronunciation-audio'),
+    'audio button should still render when dictionary returns 404');
 }
 
 console.log('PASS: LLM-driven pronunciation flow works across all expected inputs');

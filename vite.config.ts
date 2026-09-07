@@ -29,6 +29,18 @@ export default defineConfig({
           return '[name].js';
         },
         chunkFileNames: 'assets/[name]-[hash].js',
+        // Deterministic chunk names for shared modules. Without this, rollup
+        // reassigns symbols to chunks based on which entry pulls them in
+        // first (e.g. adding speech.ts merged vocabulary into a "speech"-
+        // named chunk), which breaks the tests that locate chunks by name.
+        // Pinning each shared module to its own chunk keeps names stable.
+        manualChunks: (id) => {
+          if (!id.includes('node_modules') && id.includes('src/shared/')) {
+            const base = id.split('src/shared/')[1].split('/')[0].replace(/\.ts$/, '');
+            if (base) return `shared-${base}`;
+          }
+          return undefined;
+        },
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name || '';
           if (info.endsWith('.css')) {

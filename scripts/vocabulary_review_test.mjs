@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
@@ -48,10 +48,6 @@ window.chrome = {
 };
 window.console = console;
 
-// Find the vocabulary chunk on disk; its filename is hashed.
-const assetsDir = 'dist/assets';
-const vocabFile = readdirSync(assetsDir).find((f) => f.startsWith('vocabulary-') && f.endsWith('.js'));
-assert.ok(vocabFile, `expected vocabulary chunk in ${assetsDir}`);
 // Use the standalone IIFE test bundle (built via vite.config.ts -> test-vocabulary.iife.js).
 // It already inlines every chunk the vocabulary module depends on, so we can
 // drop it straight into the JSDOM window without rewriting imports.

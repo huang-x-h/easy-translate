@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "npm run build && node scripts/twitter_regression_test.mjs && node scripts/twitter_integration_test.mjs && node scripts/selection_popup_regression_test.mjs && node scripts/vocabulary_test.mjs && node scripts/vocabulary_review_test.mjs && node scripts/vocabulary_back_button_test.mjs && node scripts/llm_pronunciation_test.mjs && node scripts/vocab_hash_navigation_test.mjs && node scripts/vocab_backfill_test.mjs && node scripts/vocab_backfill_ui_test.mjs"
+    "test": "npm run build && node scripts/twitter_regression_test.mjs && node scripts/twitter_integration_test.mjs && node scripts/selection_popup_regression_test.mjs && node scripts/vocabulary_test.mjs && node scripts/vocabulary_review_test.mjs && node scripts/vocabulary_back_button_test.mjs && node scripts/llm_pronunciation_test.mjs && node scripts/vocab_hash_navigation_test.mjs && node scripts/vocab_backfill_test.mjs && node scripts/vocab_backfill_ui_test.mjs && node scripts/speech_pronunciation_test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",

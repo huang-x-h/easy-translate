@@ -2,6 +2,7 @@ import { StorageManager } from '../shared/storage';
 import { TranslationConfig, DEFAULT_CONFIG, VocabularyEntry, ReviewRating } from '../shared/types';
 import { TranslationAPI } from '../shared/api';
 import { VocabularyManager, BackfillResult } from '../shared/vocabulary';
+import { playPronunciation } from '../shared/speech';
 
 /**
  * Scrolls the vocabulary card into view and pulses a short highlight.
@@ -283,7 +284,9 @@ async function initVocabularyManager(): Promise<void> {
         text.textContent = entry.pronunciation;
         pronunciation.appendChild(text);
       }
-      if (entry.audioUrl) {
+      // The horn shows whenever a phonetic (or a recording) exists; the
+      // click falls back to TTS when there is no recorded audioUrl.
+      if (entry.pronunciation || entry.audioUrl) {
         const audioBtn = document.createElement('button');
         audioBtn.type = 'button';
         audioBtn.className = 'vocab-item-pronunciation-audio';
@@ -292,7 +295,11 @@ async function initVocabularyManager(): Promise<void> {
         audioBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16 8.5c1.2 1 2 2.1 2 3.5s-.8 2.6-2 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
         audioBtn.addEventListener('click', (event) => {
           event.stopPropagation();
-          playAudio(entry.audioUrl, audioBtn);
+          playPronunciation({
+            audioUrl: entry.audioUrl,
+            word: entry.originalText,
+            button: audioBtn,
+          });
         });
         pronunciation.appendChild(audioBtn);
       }
@@ -492,10 +499,14 @@ async function initVocabularyManager(): Promise<void> {
     reviewTranslationEl.textContent = entry.translation;
 
     // Independent audio button next to the original word \u2014 visible
-    // whenever we have an audio URL, even before "Show answer" is clicked.
-    if (entry.audioUrl) {
+    // whenever we can pronounce (phonetic or recording), even before
+    // "Show answer" is clicked. Clicking falls back to TTS when there
+    // is no recorded audioUrl.
+    if (entry.audioUrl || entry.pronunciation) {
       reviewAudioBtn.hidden = false;
-      reviewAudioBtn.dataset.audioUrl = entry.audioUrl;
+      reviewAudioBtn.dataset.word = entry.originalText;
+      if (entry.audioUrl) reviewAudioBtn.dataset.audioUrl = entry.audioUrl;
+      else reviewAudioBtn.removeAttribute('data-audio-url');
     } else {
       reviewAudioBtn.hidden = true;
       reviewAudioBtn.removeAttribute('data-audio-url');
@@ -508,7 +519,9 @@ async function initVocabularyManager(): Promise<void> {
       text.textContent = entry.pronunciation;
       reviewPronunciationEl.appendChild(text);
     }
-    if (entry.audioUrl) {
+    // Horn in the answer area mirrors the one by the original word:
+    // shown whenever we can pronounce, with TTS fallback on click.
+    if (entry.pronunciation || entry.audioUrl) {
       const audioBtn = document.createElement('button');
       audioBtn.type = 'button';
       audioBtn.className = 'vocab-item-pronunciation-audio';
@@ -517,7 +530,11 @@ async function initVocabularyManager(): Promise<void> {
       audioBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16 8.5c1.2 1 2 2.1 2 3.5s-.8 2.6-2 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
       audioBtn.addEventListener('click', (event) => {
         event.stopPropagation();
-        if (entry.audioUrl) playAudio(entry.audioUrl, audioBtn);
+        playPronunciation({
+          audioUrl: entry.audioUrl,
+          word: entry.originalText,
+          button: audioBtn,
+        });
       });
       reviewPronunciationEl.appendChild(audioBtn);
     }
@@ -543,13 +560,18 @@ async function initVocabularyManager(): Promise<void> {
     reviewProgressFill.style.width = `${percentage}%`;
 
     // Auto-play pronunciation when a new card loads so the user can recall
-    // from sound first, then check the translation. Skip silently if no
-    // audio URL is available for this entry.
-    if (entry.audioUrl) {
+    // from sound first, then check the translation. Uses the recorded
+    // audio when available, otherwise TTS — so every pronounceable card
+    // makes a sound, not just the ones with a dict recording.
+    if (entry.audioUrl || entry.pronunciation) {
       window.setTimeout(() => {
         // Guard against the user having navigated away mid-flight.
         if (reviewSession && reviewSession.queue[reviewSession.index] === entry) {
-          playAudio(entry.audioUrl!, reviewAudioBtn);
+          playPronunciation({
+            audioUrl: entry.audioUrl,
+            word: entry.originalText,
+            button: reviewAudioBtn,
+          });
         }
       }, 350);
     }
@@ -600,20 +622,6 @@ async function initVocabularyManager(): Promise<void> {
     reviewSession = null;
     showListView();
     await refresh();
-  }
-
-  function playAudio(url: string | undefined, button?: HTMLElement | null): void {
-    if (!url) return;
-    const audio = new Audio(url);
-    if (button) {
-      audio.addEventListener('ended', () => button.classList.remove('is-playing'));
-      audio.addEventListener('error', () => button.classList.remove('is-playing'));
-      button.classList.add('is-playing');
-    }
-    audio.play().catch((error) => {
-      console.error('Failed to play audio:', error);
-      if (button) button.classList.remove('is-playing');
-    });
   }
 
   function formatRelativeTime(timestamp: number): string {
@@ -673,8 +681,11 @@ async function initVocabularyManager(): Promise<void> {
   });
   reviewRevealBtn.addEventListener('click', () => revealAnswer());
   reviewAudioBtn.addEventListener('click', () => {
-    const url = reviewAudioBtn.dataset.audioUrl;
-    if (url) playAudio(url, reviewAudioBtn);
+    playPronunciation({
+      audioUrl: reviewAudioBtn.dataset.audioUrl || undefined,
+      word: reviewAudioBtn.dataset.word || '',
+      button: reviewAudioBtn,
+    });
   });
   for (const btn of reviewRatingButtons) {
     const rating = btn.dataset.rating as ReviewRating | undefined;

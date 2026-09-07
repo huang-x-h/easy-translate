@@ -16,10 +16,12 @@ const load = (prefix) => {
   assert.ok(f, `${prefix} chunk must exist`);
   return readFileSync(`${assetsDir}/${f}`, 'utf8');
 };
-const storageSource = load('storage');
-const vocabSource = load('vocabulary');
-const typesSource = load('types');
-const apiSource = load('api');
+const storageSource = load('shared-storage');
+const vocabSource = load('shared-vocabulary');
+const typesSource = load('shared-types');
+// TranslationAPI lives in its own shared chunk.
+const apiSource = load('shared-api');
+const speechSource = load('shared-speech');
 
 const strip = (s) => s.replace(/^import\s+.*$/gm, '').replace(/export\s*\{[\s\S]*?\};?/g, '');
 
@@ -64,7 +66,7 @@ storageStore.set('vocabulary_index', ['vocab_a', 'vocab_b']);
 storageStore.set('vocab_a', { id: 'vocab_a', originalText: 'apple', normalizedText: 'apple', translation: '苹果', sourceUrl: 'x', targetLang: 'zh-CN', createdAt: now, updatedAt: now });
 storageStore.set('vocab_b', { id: 'vocab_b', originalText: 'banana', normalizedText: 'banana', translation: '香蕉', sourceUrl: 'x', targetLang: 'zh-CN', createdAt: now, updatedAt: now });
 
-const optionsBundle = `(function(){\n${strip(typesSource)}\n${strip(storageSource)}\n${strip(vocabSource)}\n${strip(apiSource)}\n${strip(optionsJs)}\n})();`;
+const optionsBundle = `(function(){\n${strip(typesSource)}\n${strip(storageSource)}\n${strip(apiSource)}\n${strip(speechSource)}\n${strip(vocabSource)}\n${strip(optionsJs)}\n})();`;
 window.eval(optionsBundle);
 document.dispatchEvent(new window.Event('DOMContentLoaded'));
 

@@ -44,13 +44,13 @@ const html = readFileSync('src/options/index.html', 'utf8');
 const optionsJs = readFileSync('dist/options.js', 'utf8');
 const { readdirSync } = await import('node:fs');
 const assetsDir = 'dist/assets';
-const storageFile = readdirSync(assetsDir).find((f) => f.startsWith('storage-') && f.endsWith('.js'));
-const vocabFile = readdirSync(assetsDir).find((f) => f.startsWith('vocabulary-') && f.endsWith('.js'));
+const storageFile = readdirSync(assetsDir).find((f) => f.startsWith('shared-storage-') && f.endsWith('.js'));
+const vocabFile = readdirSync(assetsDir).find((f) => f.startsWith('shared-vocabulary-') && f.endsWith('.js'));
 assert.ok(storageFile, 'storage chunk must exist in dist/assets');
 assert.ok(vocabFile, 'vocabulary chunk must exist in dist/assets');
 const storageSource = readFileSync(`${assetsDir}/${storageFile}`, 'utf8');
 const vocabSource = readFileSync(`${assetsDir}/${vocabFile}`, 'utf8');
-const typesFile = readdirSync(assetsDir).find((f) => f.startsWith('types-') && f.endsWith('.js'));
+const typesFile = readdirSync(assetsDir).find((f) => f.startsWith('shared-types-') && f.endsWith('.js'));
 assert.ok(typesFile, `expected types chunk in ${assetsDir}`);
 const typesSource = readFileSync(`${assetsDir}/${typesFile}`, 'utf8');
 
