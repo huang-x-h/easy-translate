@@ -87,6 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       model: modelInput.value.trim() || 'glm-4-flash',
       targetLang: 'zh-CN',
       translationStyle: 'natural',
+      translationDirection: 'auto',
     };
 
     if (!config.apiKey) {
@@ -132,6 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       model: modelInput.value.trim(),
       targetLang: targetLangSelect.value,
       translationStyle: 'natural',
+      translationDirection: 'auto',
     };
 
     try {

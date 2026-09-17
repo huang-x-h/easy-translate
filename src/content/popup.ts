@@ -2,8 +2,9 @@ import { TranslationAPI } from '../shared/api';
 import { StorageManager } from '../shared/storage';
 import { DictionaryAPI, VocabularyManager } from '../shared/vocabulary';
 import { playPronunciation } from '../shared/speech';
-import { isWordLike } from '../shared/text';
-import { PronunciationInfo } from '../shared/types';
+import { findEditableForSelection, replaceSelection } from '../shared/replace';
+import { isWordLike, isChinese } from '../shared/text';
+import { PronunciationInfo, TranslationDirection } from '../shared/types';
 
 export class SelectionPopup {
   private floatingButton: HTMLElement | null = null;
@@ -15,6 +16,8 @@ export class SelectionPopup {
   private isTranslating: boolean = false;
   private isSavedToVocabulary: boolean = false;
   private selectionRect: DOMRect | null = null;
+  /** Current translation direction — 'auto' infers from the source. */
+  private currentDirection: TranslationDirection = 'auto';
   private vocabFeedbackTimer: number | null = null;
 
   constructor() {
@@ -116,6 +119,12 @@ export class SelectionPopup {
     this.currentPronunciationAudio = '';
     this.isSavedToVocabulary = false;
     this.selectionRect = rect;
+    // Heuristic: if the user picked Chinese source text, default to
+    // translating into English (zh-to-en). English text → en-to-zh.
+    // The user can override from the popup toggle.
+    if (this.currentDirection === 'auto') {
+      this.currentDirection = isChinese(text) ? 'zh-to-en' : 'en-to-zh';
+    }
     this.hidePopup();
 
     const buttonX = rect.right + 8;
@@ -191,22 +200,50 @@ export class SelectionPopup {
   }
 
   private renderPopupShell(bodyHtml: string): string {
+    const dirLabel = this.renderDirectionLabel();
     return `
       <div class="immersive-translate-modal-title imt-notranslate" style="cursor: move;">
         <div class="immersive-translate-modal-title-left">
           ${this.renderLogo()}
           <span class="immersive-translate-title-text">EasyTranslate</span>
         </div>
+        <div class="immersive-translate-modal-title-center">
+          <button id="btn-direction" class="immersive-translate-direction-toggle" type="button" title="点击切换翻译方向">
+            ${dirLabel}
+          </button>
+        </div>
         <div class="immersive-translate-modal-title-right">
           <span class="icon-wrapper-no-bg close-icon header-icon immersive-translate-close" title="Close">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <path d="M14.682 13.9917L18.6826 9.99172C18.8046 9.86977 18.8522 9.69202 18.8076 9.52544C18.7114 9.16649 18.2627 9.04627 18 9.30903L14 13.3096L9.99997 9.30905C9.87802 9.1871 9.70027 9.13947 9.53369 9.18411C9.17474 9.28028 9.05452 9.72896 9.31728 9.99173L13.3179 13.9917L9.38353 17.9254C9.26159 18.0474 9.21396 18.2251 9.2586 18.3917C9.35477 18.7507 9.80345 18.8709 10.0662 18.6081L14 14.6738L17.9337 18.6081C18.0556 18.7301 18.2334 18.7777 18.4 18.7331C18.7589 18.6369 18.8791 18.1882 18.6164 17.9254L14.682 13.9917Z" fill="currentColor"/>
+              <path d="M14.682 13.9917L18.6826 9.99172L18.8046 9.86977C18.8522 9.69202 18.8076 9.52544 18.7114 9.16649 18.2627 9.04627 18 9.30903L14 13.3096L9.99997 9.30905C9.87802 9.1871 9.70027 9.13947 9.53369 9.18411C9.17474 9.28028 9.05452 9.72896 9.31728 9.99173L13.3179 13.9917L9.38353 17.9254C9.26159 18.0474 9.21396 18.2251 9.2586 18.3917C9.35477 18.7507 9.80345 18.8709 10.0662 18.6081L14 14.6738L17.9337 18.6081C18.0556 18.7301 18.2334 18.7777 18.4 18.7331C18.7589 18.6369 18.8791 18.1882 18.6164 17.9254L14.682 13.9917Z" fill="currentColor"/>
             </svg>
           </span>
         </div>
       </div>
       <div class="immersive-translate-modal-body imt-notranslate">${bodyHtml}</div>
     `;
+  }
+
+  /**
+   * Render the small label that shows the current translation
+   * direction. The actual cycle happens in `cycleDirection()`; here we
+   * just project whatever the current state is into a glyph.
+   */
+  private renderDirectionLabel(): string {
+    const d = this.currentDirection;
+    if (d === 'en-to-zh') return 'EN \u2192 \u4E2D';
+    if (d === 'zh-to-en') return '\u4E2D \u2192 EN';
+    // 'auto'
+    return 'Auto';
+  }
+
+  /** Cycle through auto → en-to-zh → zh-to-en → auto on click. */
+  private cycleDirection(): void {
+    if (this.currentDirection === 'auto') this.currentDirection = 'en-to-zh';
+    else if (this.currentDirection === 'en-to-zh') this.currentDirection = 'zh-to-en';
+    else this.currentDirection = 'auto';
+    const btn = this.popup?.querySelector<HTMLButtonElement>('#btn-direction');
+    if (btn) btn.innerHTML = this.renderDirectionLabel();
   }
 
   private renderLogo(): string {
@@ -271,7 +308,16 @@ export class SelectionPopup {
         return;
       }
 
-      const cached = await StorageManager.getCachedTranslation(this.currentText, config.targetLang);
+      // Map current direction → target language code. en-to-zh honors
+      // the user's chosen targetLang (could be any language, default
+      // zh-CN); zh-to-en hardcodes 'en' since the user's configured
+      // targetLang is by definition the destination for the en→?
+      // direction.
+      const targetLang = this.currentDirection === 'zh-to-en'
+        ? 'en'
+        : config.targetLang;
+
+      const cached = await StorageManager.getCachedTranslation(this.currentText, targetLang);
       if (cached) {
         const showPhonetic = isWordLike(this.currentText);
         const pronunciation = showPhonetic && cached.pronunciation
@@ -287,7 +333,7 @@ export class SelectionPopup {
       const api = new TranslationAPI(config);
       const result = await api.translate({
         text: this.currentText,
-        targetLang: config.targetLang,
+        targetLang,
       });
 
       if (result.error) {
@@ -301,7 +347,7 @@ export class SelectionPopup {
         await StorageManager.setCachedTranslation(
           this.currentText,
           result.translatedText,
-          config.targetLang,
+          targetLang,
           // Persist the IPA even for non-word inputs so a future
           // single-word selection of the same string can still use it.
           result.pronunciation,
@@ -339,6 +385,7 @@ export class SelectionPopup {
         <div class="immersive-translate-actions">
           <button id="btn-copy" class="immersive-translate-action-button" type="button">&#x590d;&#x5236;&#x8bd1;&#x6587;</button>
           <button id="btn-swap" class="immersive-translate-action-button" type="button">&#x4ea4;&#x6362;</button>
+          <button id="btn-replace" class="immersive-translate-action-button" type="button" hidden title="&#x66ff;&#x6362;&#x9009;&#x4e2d;&#x6587;&#x672c;">&#x66ff;&#x6362;&#x9009;&#x533a;</button>
           <button id="btn-vocab" class="immersive-translate-action-button immersive-translate-action-button--vocab" type="button" data-state="unsaved">
             <span class="immersive-translate-action-icon" aria-hidden="true">&#x2b50;</span>
             <span class="immersive-translate-action-label">&#x52a0;&#x5165;&#x751f;&#x8bcd;&#x672c;</span>
@@ -351,8 +398,34 @@ export class SelectionPopup {
     this.popup.querySelector('#btn-swap')?.addEventListener('click', () => this.swapLanguages());
     this.popup.querySelector('#btn-vocab')?.addEventListener('click', () => this.toggleVocabulary());
     this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
+    this.popup.querySelector('#btn-direction')?.addEventListener('click', () => this.cycleDirection());
+    const replaceBtn = this.popup.querySelector<HTMLButtonElement>('#btn-replace');
+    if (replaceBtn) {
+      replaceBtn.hidden = this.currentDirection !== 'zh-to-en';
+      if (this.currentDirection === 'zh-to-en') {
+        const editable = findEditableForSelection();
+        replaceBtn.hidden = editable === null;
+        if (!editable) replaceBtn.title = '当前选区不在可编辑元素中';
+      }
+      replaceBtn.addEventListener('click', () => this.replaceSelectionWithTranslation());
+    }
 
     await this.refreshVocabularyState();
+  }
+
+  /**
+   * Replace the user's currently selected text with the just-translated
+   * English (only used in zh-to-en mode, where the user wants to swap
+   * their typed Chinese for English in a Twitter reply, etc.).
+   */
+  private replaceSelectionWithTranslation(): void {
+    if (!this.currentTranslation) return;
+    const ok = replaceSelection(this.currentTranslation);
+    this.showVocabularyFeedback(
+      ok ? '已替换选区' : '未找到可替换的选区',
+      ok ? 'success' : 'info',
+    );
+    if (ok) this.hidePopup();
   }
 
   private async refreshVocabularyState(): Promise<void> {

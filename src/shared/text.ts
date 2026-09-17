@@ -70,3 +70,21 @@ function isCjk(ch: string): boolean {
     || /[\uAC00-\uD7AF]/u.test(ch)
   );
 }
+
+/**
+ * Heuristic: does the given text look like Chinese? We use this to
+ * auto-pick the translation direction when the user hasn't explicitly
+ * chosen one. Heuristic, not authoritative — Twitter mixes scripts a
+ * lot, so callers should let the user override.
+ */
+export function isChinese(text: string): boolean {
+  if (!text) return false;
+  let cjk = 0;
+  let latin = 0;
+  for (const ch of text) {
+    if (isCjk(ch)) cjk++;
+    else if (/[A-Za-z]/.test(ch)) latin++;
+  }
+  // Require CJK to clearly outnumber Latin letters to count as Chinese.
+  return cjk > 0 && cjk >= latin;
+}

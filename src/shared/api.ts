@@ -1,4 +1,5 @@
 import { TranslationConfig, TranslationRequest, TranslationResponse } from './types';
+import { isChinese } from './text';
 
 export class TranslationAPI {
   private config: TranslationConfig;
@@ -18,7 +19,25 @@ export class TranslationAPI {
 
     // 我们让模型同步返回译文 + 源文本的 IPA 音标。一次拿两个数据点，
     // 省掉前端再调 dictionaryapi.dev 的覆盖度问题（很多词查不到）。
-    const systemPrompt = `You are a professional translator.
+    //
+    // Prompt 根据方向动态生成：英→中模式侧重意译；中→英模式侧重
+    // 自然地道的英文（Twitter/Reddit 等口语场景）。
+    const sourceIsChinese = isChinese(text);
+    const systemPrompt = sourceIsChinese
+      ? `You are a professional translator writing for casual online conversation (Twitter, Reddit, Discord).
+
+Translate the input text from Chinese (or other source language) into natural, idiomatic ${targetLang}. Match the casual register — contractions, common slang, and emoji are fine. Keep proper nouns, brand names, and code snippets verbatim. Never leave the translation empty.
+
+Return a JSON object with EXACTLY these two fields:
+
+1. "translation": the natural ${targetLang} translation of the input text. Write it as if a native speaker were replying to the original message in a chat thread.
+
+2. "pronunciation": always return an empty string "" for non-word inputs.
+
+Rules:
+- Output ONLY the JSON object. No markdown fences, no commentary.
+- Keep the translation concise — chat replies should be punchy.`
+      : `You are a professional translator.
 
 Return a JSON object with exactly these two fields:
 

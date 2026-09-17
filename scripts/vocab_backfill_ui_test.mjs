@@ -22,6 +22,10 @@ const typesSource = load('shared-types');
 // TranslationAPI lives in its own shared chunk.
 const apiSource = load('shared-api');
 const speechSource = load('shared-speech');
+// isChinese / isWordLike live in their own chunk; api.ts depends on
+// text.ts so this chunk must be loaded for the api translate() call
+// to not throw.
+const textSource = load('shared-text');
 
 const strip = (s) => s.replace(/^import\s+.*$/gm, '').replace(/export\s*\{[\s\S]*?\};?/g, '');
 
@@ -66,7 +70,7 @@ storageStore.set('vocabulary_index', ['vocab_a', 'vocab_b']);
 storageStore.set('vocab_a', { id: 'vocab_a', originalText: 'apple', normalizedText: 'apple', translation: '苹果', sourceUrl: 'x', targetLang: 'zh-CN', createdAt: now, updatedAt: now });
 storageStore.set('vocab_b', { id: 'vocab_b', originalText: 'banana', normalizedText: 'banana', translation: '香蕉', sourceUrl: 'x', targetLang: 'zh-CN', createdAt: now, updatedAt: now });
 
-const optionsBundle = `(function(){\n${strip(typesSource)}\n${strip(storageSource)}\n${strip(apiSource)}\n${strip(speechSource)}\n${strip(vocabSource)}\n${strip(optionsJs)}\n})();`;
+const optionsBundle = `(function(){\n${strip(typesSource)}\n${strip(textSource)}\n${strip(storageSource)}\n${strip(apiSource)}\n${strip(speechSource)}\n${strip(vocabSource)}\n${strip(optionsJs)}\n})();`;
 window.eval(optionsBundle);
 document.dispatchEvent(new window.Event('DOMContentLoaded'));
 

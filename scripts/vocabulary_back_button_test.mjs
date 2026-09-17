@@ -53,6 +53,11 @@ const vocabSource = readFileSync(`${assetsDir}/${vocabFile}`, 'utf8');
 const typesFile = readdirSync(assetsDir).find((f) => f.startsWith('shared-types-') && f.endsWith('.js'));
 assert.ok(typesFile, `expected types chunk in ${assetsDir}`);
 const typesSource = readFileSync(`${assetsDir}/${typesFile}`, 'utf8');
+// isWordLike / isChinese live in their own chunk; options.js depends
+// on them via shared-text, so we must inline that chunk too.
+const textFile = readdirSync(assetsDir).find((f) => f.startsWith('shared-text-') && f.endsWith('.js'));
+assert.ok(textFile, `expected text chunk in ${assetsDir}`);
+const textSource = readFileSync(`${assetsDir}/${textFile}`, 'utf8');
 
 const dom = new JSDOM(html, {
   url: 'chrome-extension://test/options.html',
@@ -143,6 +148,7 @@ const optionsStripped = optionsJs.replace(/^import\s+.*$/gm, '');
 const optionsBundle = `
   (function () {
     ${typesInlined}
+    ${textSource.replace(/export\s*\{[\s\S]*?\};?/g, '')}
     ${storageInlined}
     ${vocabInlined}
     ${optionsStripped}

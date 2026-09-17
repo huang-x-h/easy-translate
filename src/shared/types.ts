@@ -4,6 +4,12 @@ export interface TranslationConfig {
   targetLang: string;
   model: string;
   translationStyle: 'natural' | 'literal';
+  /**
+   * Which way to translate:
+   * - 'auto' (default) — pick direction from the source text
+   * - 'en-to-zh' / 'zh-to-en' — explicit, overrides auto-detection
+   */
+  translationDirection: TranslationDirection;
 }
 
 export interface TranslationRequest {
@@ -58,6 +64,10 @@ export interface PronunciationInfo {
 
 export type TranslationMode = 'selection' | 'page';
 
+export type TranslationDirection = 'auto' | 'en-to-zh' | 'zh-to-en';
+
+export const DEFAULT_DIRECTION: TranslationDirection = 'auto';
+
 export interface ParagraphData {
   element: HTMLElement;
   text: string;
@@ -70,6 +80,7 @@ export const DEFAULT_CONFIG: TranslationConfig = {
   targetLang: 'zh-CN',
   model: 'glm-4-flash',
   translationStyle: 'natural',
+  translationDirection: 'auto',
 };
 
 export const STORAGE_KEYS = {

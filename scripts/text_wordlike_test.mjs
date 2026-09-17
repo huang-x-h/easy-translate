@@ -19,7 +19,7 @@ window.eval(textBundle);
 const textSource = readFileSync('src/shared/text.ts', 'utf8')
   // Strip TypeScript types / imports that the test harness can't run.
   .replace(/import[^;]+;\s*/g, '')
-  .replace(/^export\s+function/m, 'function')
+  .replace(/\bexport\s+function/g, 'function')
   .replace(/:\s*boolean/g, '')
   .replace(/:\s*string/g, '')
   .replace(/:\s*number/g, '');
