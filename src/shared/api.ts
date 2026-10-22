@@ -1,6 +1,9 @@
 import { TranslationConfig, TranslationRequest, TranslationResponse } from './types';
 import { isChinese } from './text';
 
+/** How long to wait for the background service worker to answer. */
+const BACKGROUND_TIMEOUT_MS = 30_000;
+
 export class TranslationAPI {
   private config: TranslationConfig;
 
@@ -8,7 +11,34 @@ export class TranslationAPI {
     this.config = config;
   }
 
+  /**
+   * Translate `request`, routing the actual network call through the
+   * background service worker when we are running in a content script.
+   *
+   * Why the detour? Chrome attributes content-script fetches to the
+   * *host page's* origin. Most LLM APIs (Zhipu/OpenAI-compatible ones)
+   * don't echo `Access-Control-Allow-Origin` for arbitrary origins, so
+   * the preflight fails and the request dies with a bare
+   * "TypeError: Failed to fetch" — the real cause (bad key, quota,
+   * unsupported parameter) is never surfaced. Extension service workers
+   * and extension pages, on the other hand, hold host permissions and
+   * are exempt from that check.
+   *
+   * @see https://developer.chrome.com/docs/extensions/develop/concepts/network-requests
+   */
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
+    if (this.canDelegateToBackground()) {
+      return this.translateViaBackground(request);
+    }
+    return this.translateDirect(request);
+  }
+
+  /**
+   * Perform the HTTP call inline. Called by the background service
+   * worker (which must not delegate, or we'd recurse) and by the
+   * fallback path when messaging is unavailable.
+   */
+  async translateDirect(request: TranslationRequest): Promise<TranslationResponse> {
     const { text, context, targetLang } = request;
 
     // 修复 endpoint URL，确保正确拼接
@@ -77,8 +107,8 @@ Rules:
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`API error: ${response.status} - ${error}`);
+        const errorBody = await response.text();
+        throw new ApiError(response.status, errorBody);
       }
 
       const data = await response.json();
@@ -90,9 +120,138 @@ Rules:
       console.error('[EasyTranslate] translate error:', error);
       return {
         translatedText: '',
-        error: error instanceof Error ? error.message : 'Network error',
+        error: describeError(error, endpoint),
       };
     }
+  }
+
+  /**
+   * True when we should hand the request to the background service
+   * worker instead of hitting the network ourselves.
+   *
+   * Service workers have no `window`, so the check doubles as "am I the
+   * background?" — which prevents infinite delegation.
+   */
+  private canDelegateToBackground(): boolean {
+    if (typeof window === 'undefined') return false;
+    return typeof chrome !== 'undefined'
+      && !!chrome.runtime
+      && typeof chrome.runtime.sendMessage === 'function';
+  }
+
+  private translateViaBackground(request: TranslationRequest): Promise<TranslationResponse> {
+    return new Promise((resolve) => {
+      // Guard against a background that never replies (service worker
+      // asleep, message dropped). Without this the popup would spin on
+      // "translating..." forever.
+      let settled = false;
+      const finish = (response: TranslationResponse) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(response);
+      };
+
+      const timer = window.setTimeout(() => {
+        finish({
+          translatedText: '',
+          error: '后台翻译服务超时（30 秒无响应）。请重试，或检查扩展是否被禁用。',
+        });
+      }, BACKGROUND_TIMEOUT_MS);
+
+      try {
+        chrome.runtime.sendMessage({ type: 'TRANSLATE', request }, (response: any) => {
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            finish({
+              translatedText: '',
+              error: `后台翻译服务调用失败：${lastError.message}`,
+            });
+            return;
+          }
+          if (!response) {
+            finish({ translatedText: '', error: '后台翻译服务无响应' });
+            return;
+          }
+          if (response.success === false) {
+            finish({
+              translatedText: '',
+              error: response.error || '后台翻译服务返回错误',
+            });
+            return;
+          }
+          finish({
+            translatedText: response.translatedText ?? '',
+            pronunciation: response.pronunciation,
+            error: response.error,
+          });
+        });
+      } catch (error) {
+        finish({
+          translatedText: '',
+          error: describeError(error, this.buildEndpoint()),
+        });
+      }
+    });
+  }
+
+  private buildEndpoint(): string {
+    const baseUrl = this.config.apiEndpoint.replace(/\/+$/, '');
+    return baseUrl.endsWith('/chat/completions')
+      ? baseUrl
+      : `${baseUrl}/chat/completions`;
+  }
+}
+
+/**
+ * An HTTP-level failure. Carries the status + body so we can translate
+ * them into an actionable message for the user.
+ */
+class ApiError extends Error {
+  constructor(public readonly status: number, public readonly body: string) {
+    super(`API error: ${status}`);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Turns a thrown error into a message the user can act on. A bare
+ * "Failed to fetch" tells them nothing — this is where we explain what
+ * actually went wrong.
+ */
+function describeError(error: unknown, endpoint: string): string {
+  if (error instanceof ApiError) {
+    return describeHttpError(error.status, error.body);
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/failed to fetch|networkerror|err_failed|load failed/i.test(message)) {
+    return `无法连接到 ${endpoint}。请检查：① API Endpoint 是否正确且可访问；② 网络或代理是否拦截；③ API Key 是否有效。`;
+  }
+
+  return message;
+}
+
+function describeHttpError(status: number, body: string): string {
+  const detail = body.trim().slice(0, 300);
+  const suffix = detail ? ` 服务端返回：${detail}` : '';
+
+  switch (status) {
+    case 400:
+      return `请求参数不被服务端接受（HTTP 400）。当前模型可能不支持所选参数。${suffix}`;
+    case 401:
+    case 403:
+      return `API Key 无效或无权访问（HTTP ${status}）。请检查设置中的 API Key。${suffix}`;
+    case 404:
+      return `接口地址不存在（HTTP 404）。请检查 API Endpoint 是否填全。${suffix}`;
+    case 429:
+      return `请求过于频繁或额度已用尽（HTTP 429）。请稍后重试或检查账户余额。${suffix}`;
+    default:
+      if (status >= 500) {
+        return `服务端错误（HTTP ${status}），请稍后重试。${suffix}`;
+      }
+      return `API 请求失败（HTTP ${status}）。${suffix}`;
   }
 }
 

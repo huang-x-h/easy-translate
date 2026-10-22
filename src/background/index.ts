@@ -1,6 +1,7 @@
 // Background Service Worker (Manifest V3)
 
 import { StorageManager } from '../shared/storage';
+import { TranslationAPI } from '../shared/api';
 import { DEFAULT_CONFIG } from '../shared/types';
 
 class BackgroundService {
@@ -57,6 +58,19 @@ class BackgroundService {
         await StorageManager.setConfig(message.config);
         sendResponse({ success: true });
         break;
+
+      case 'TRANSLATE': {
+        // Content scripts can't call the LLM API directly: Chrome
+        // attributes their fetches to the host page's origin, so the
+        // API's preflight rejects them ("Failed to fetch"). The service
+        // worker holds host permissions and is exempt, so we do the
+        // actual request here and hand the parsed result back.
+        const translateConfig = await StorageManager.getConfig();
+        const translateApi = new TranslationAPI(translateConfig);
+        const result = await translateApi.translateDirect(message.request);
+        sendResponse(result);
+        break;
+      }
 
       case 'TRANSLATE_TAB':
         await this.translateCurrentTab();
