@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
-package-lock.json
+# NOTE: package-lock.json is intentionally NOT ignored. The release
+# workflow runs `npm ci`, which requires a committed lock file, and
+# committing it keeps CI builds reproducible.
 yarn.lock
 pnpm-lock.yaml
 
@@ -42,3 +44,6 @@ coverage/
 *.tmp
 *.temp
 .cache/
+
+# Release verification scratch dir
+.release-verify/
