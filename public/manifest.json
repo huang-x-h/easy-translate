@@ -1,22 +1,35 @@
 {
   "manifest_version": 3,
   "name": "EasyTranslate",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI-powered translator with selection & bilingual page reading",
   "author": {
     "email": "huang.x.hui@gmail.com"
   },
-  "permissions": ["storage", "activeTab", "scripting", "tts"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tts"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_end"
     }
   ],
@@ -32,8 +45,12 @@
   "options_page": "src/options/index.html",
   "web_accessible_resources": [
     {
-      "resources": ["icons/icon-32.png"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "icons/icon-32.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "icons": {
