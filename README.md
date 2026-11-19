@@ -93,6 +93,8 @@ npm run dev
 
 > 💡 **音标能力说明**：通用大模型（智谱 / OpenAI / Ollama 等）能在翻译时一并给出 IPA 音标；专用翻译模型（Index-Translate）只输出译文，英文单词的音标改由词典补齐。两者发音都用真人录音优先、系统 TTS 兜底。
 
+> ⚠️ **关于哔哩哔哩 Index-Translate**：它的 CDN 会拦截携带 `chrome-extension://` Origin 的请求（返回 412 挑战页）。扩展已通过 `declarativeNetRequest` 规则去掉该 header，行为与官方文档建议的「本地代理」方案一致。**如果遇到 HTTP 412，请到 `chrome://extensions` 刷新扩展**（新版会重新安装该规则）。
+
 ### 6. 开始使用
 
 #### 划词翻译

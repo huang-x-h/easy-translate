@@ -252,7 +252,9 @@ function describeError(error: unknown, endpoint: string): string {
 }
 
 function describeHttpError(status: number, body: string): string {
-  const detail = body.trim().slice(0, 300);
+  // A bot-challenge page is HTML noise — don't paste it into the UI.
+  const isHtml = /^\s*<!DOCTYPE|<html/i.test(body);
+  const detail = isHtml ? '' : body.trim().slice(0, 300);
   const suffix = detail ? ` 服务端返回：${detail}` : '';
 
   switch (status) {
@@ -263,6 +265,14 @@ function describeHttpError(status: number, body: string): string {
       return `API Key 无效或无权访问（HTTP ${status}）。请检查设置中的 API Key。${suffix}`;
     case 404:
       return `接口地址不存在（HTTP 404）。请检查 API Endpoint 是否填全。${suffix}`;
+    case 412:
+      // Several CDNs answer requests carrying a browser-extension
+      // Origin with 412 + an HTML bot-challenge page. We strip that
+      // header via declarativeNetRequest; if the user still hits this,
+      // the rule isn't installed (or the endpoint was changed).
+      return '服务端拒绝了请求（HTTP 412）。该服务会拦截浏览器扩展的请求，'
+        + '请确认扩展已完全重载（chrome://extensions → 刷新图标），'
+        + '或改用其它翻译服务。';
     case 429:
       return `请求过于频繁或额度已用尽（HTTP 429）。请稍后重试或检查账户余额。${suffix}`;
     default:

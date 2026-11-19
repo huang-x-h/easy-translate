@@ -190,6 +190,30 @@ const CONFIG = {
 }
 
 // ---------------------------------------------------------------------------
+// 5b. HTTP 412 (CDN bot challenge) gets an actionable message and the HTML
+//     challenge page is not pasted into the UI.
+// ---------------------------------------------------------------------------
+{
+  const { TranslationAPI } = buildDom({
+    withSendMessage: false,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 412,
+      async text() {
+        return '<!DOCTYPE html>\n<html lang="zh-cn"><head><meta http-equiv="Access-Control-Allow-Origin" content="*"/></head><body>challenge</body></html>';
+      },
+    }),
+  });
+  const api = new TranslationAPI(CONFIG);
+  const result = await api.translateDirect({ text: 'hi', targetLang: 'zh-CN' });
+
+  assert.match(result.error, /412/, 'should mention the status');
+  assert.match(result.error, /重载|刷新/, 'should tell the user what to do');
+  assert.ok(!/<html/i.test(result.error), 'the HTML challenge page must not leak into the message');
+  assert.ok(!/DOCTYPE/i.test(result.error), 'the HTML challenge page must not leak into the message');
+}
+
+// ---------------------------------------------------------------------------
 // 6. A silent background doesn't hang the popup forever — it times out.
 // ---------------------------------------------------------------------------
 {

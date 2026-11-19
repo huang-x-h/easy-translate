@@ -10,7 +10,8 @@
     "storage",
     "activeTab",
     "scripting",
-    "tts"
+    "tts",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "<all_urls>"

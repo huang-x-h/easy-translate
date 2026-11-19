@@ -25,6 +25,7 @@
 | **Translation Engine (Provider)** | The configured backend + its declared capabilities | `zhipu` (general LLM), `index-translate` (dedicated translation model), `custom` |
 | **Engine Capability** | What a provider can do: JSON output, IPA generation, response_format support | Declared in `src/shared/providers.ts`; the request builder reads it instead of hard-coding checks |
 | **Index-Translate** | Bilibili's open-source translation model family, served as a free OpenAI-compatible public API | `https://index-translate.bilibili.com/v1`, model `Index-Translate-35B-A3B`, key not validated; vLLM-backed so thinking must be disabled |
+| **Origin Header Rule** | A declarativeNetRequest rule that drops the `Origin` header on our requests to engines that need it | Some CDNs answer `chrome-extension://` origins with HTTP 412 + a bot-challenge page; the service's own docs tell extensions to use a local proxy, which sends no Origin at all |
 | **Streaming Response** | Server sends partial translation results progressively | Better UX for real-time feedback |
 | **Batch Translation** | Sending multiple paragraphs for parallel translation | Efficient for full-page translation |
 | **Translation Cache** | Local storage of translated text keyed by content hash | Reduces API calls, 7-day TTL |

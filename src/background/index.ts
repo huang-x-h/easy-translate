@@ -3,6 +3,7 @@
 import { StorageManager } from '../shared/storage';
 import { TranslationAPI } from '../shared/api';
 import { DEFAULT_CONFIG } from '../shared/types';
+import { installOriginStripRules } from '../shared/dnr';
 
 class BackgroundService {
   constructor() {
@@ -10,8 +11,13 @@ class BackgroundService {
   }
 
   private init(): void {
-    // Initialize extension on install
+    // Install extension on install
     chrome.runtime.onInstalled.addListener(this.handleInstall.bind(this));
+
+    // The service worker can be torn down and revived at any time, so
+    // make sure the header-rewriting rules are in place on every start
+    // (dynamic rules survive restarts, but this also covers upgrades).
+    void installOriginStripRules(chrome.runtime.id);
 
     // Listen for messages from content scripts and popup
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -32,6 +38,10 @@ class BackgroundService {
   }
 
   private async handleInstall(details: chrome.runtime.InstalledDetails): Promise<void> {
+    // Install the DNR rules that strip the Origin header for engines
+    // whose CDN rejects browser-extension origins.
+    await installOriginStripRules(chrome.runtime.id);
+
     if (details.reason === 'install') {
       // Set default configuration
       await StorageManager.setConfig(DEFAULT_CONFIG);
