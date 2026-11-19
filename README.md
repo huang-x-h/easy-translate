@@ -229,7 +229,24 @@ A：XHTML 文档要求 `innerHTML` 传入良构 XML。已在 [d026cad](https://g
 
 **Q：支持 Firefox / Safari 吗？**
 
-A：当前仅支持 Chromium 内核浏览器（Chrome、Edge、Brave、Arc 等）。Firefox 需要额外适配 Manifest V2/V3 差异，计划后续支持。
+A：当前仅支持 Chromium 内核浏览器（Chrome、Edge、Brave、Arc 等）。Firefox 需要额外适配 Manifest V2/MV3 差异，计划后续支持。
+
+**Q：用了哔哩哔哩 Index-Translate 报 HTTP 412 怎么办？**
+
+A：该服务的 CDN 会拦截携带 `chrome-extension://` Origin 的请求。扩展已通过 `declarativeNetRequest` 规则移除该 header（与官方文档建议的本地代理方案一致）。若仍报 412，请到 `chrome://extensions` 刷新扩展以重新安装规则。
+
+## 权限说明
+
+| 权限 | 用途 |
+| --- | --- |
+| `storage` | 本地保存 API Key、翻译缓存、生词本、复习记录 |
+| `activeTab` | 仅在用户主动划词时向当前页面注入内容脚本 |
+| `scripting` | 按需注入内容脚本（页面未加载扩展时） |
+| `tts` | 朗读单词发音，使用浏览器/系统语音引擎，不联网 |
+| `declarativeNetRequestWithHostAccess` | 仅对哔哩哔哩翻译接口移除 `Origin` 请求头（其 CDN 会拦截扩展来源）。规则只作用于本扩展发起、指向该单一域名的 POST 请求 |
+| `<all_urls>` | 划词翻译需在任意网页监听文本选区 |
+
+**隐私**：所有翻译请求（原文与译文）只发往你在设置中配置的 API 服务地址；扩展自身不收集、不上传任何数据。
 
 ## License
 
