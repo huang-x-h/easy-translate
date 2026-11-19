@@ -324,8 +324,8 @@ export class SelectionPopup {
           ? { phonetic: cached.pronunciation, audioUrl: undefined }
           : null;
         this.showResult(cached.translatedText, pronunciation);
-        if (pronunciation) {
-          void this.attachAudioFallback();
+        if (isWordLike(this.currentText)) {
+          void this.ensurePronunciation();
         }
         return;
       }
@@ -352,10 +352,12 @@ export class SelectionPopup {
           // single-word selection of the same string can still use it.
           result.pronunciation,
         );
-        // LLM 只给 IPA、不给音频。LLM 认为这是单词（给出了音标）
-        // 时才去字典 API 补一个音频按钮，避免不必要的请求。
-        if (pronunciation) {
-          void this.attachAudioFallback();
+        // 音标与发音是两个独立能力：
+        //   - 音标文本：引擎能给最好（LLM），给不了就查 dictionaryapi.dev
+        //   - 发音音频：真人录音优先，没有就用系统 TTS
+        // 所以只要选中的是单词，就走一遍 ensurePronunciation 补全。
+        if (showPhonetic) {
+          void this.ensurePronunciation();
         }
       }
     } catch (error) {
@@ -537,12 +539,27 @@ export class SelectionPopup {
     return `vocab_${hash >>> 0}`;
   }
 
-  private async attachAudioFallback(): Promise<void> {
-    // LLM 只给 IPA、不给音频 URL。字典 API 能查到真人录音时，把
-    // audioUrl 缓存到 currentPronunciationAudio，让喇叭按钮点击
-    // 时优先播 mp3；查不到也不影响——点击会走 TTS 兜底。
-    if (!DictionaryAPI.isLookupableWord(this.currentText)) return;
+  /**
+   * Second source for the phonetic, used when the translation engine
+   * couldn't produce one.
+   *
+   * Phonetic text and pronunciation audio are two separate capabilities:
+   *
+   *   - The IPA string comes either from the LLM (best coverage — knows
+   *     brand names, slang, loanwords) or from dictionaryapi.dev (only
+   *     covers English words, but works with any engine).
+   *   - The audio comes either from a dictionary recording or from the
+   *     system TTS via `chrome.tts`, which works regardless of engine.
+   *
+   * So when the engine returns no IPA we fall back to the dictionary,
+   * and if that yields a phonetic we inject the row into the already
+   * rendered popup.
+   */
+  private async ensurePronunciation(): Promise<void> {
+    if (!isWordLike(this.currentText)) return;
     if (!this.popup || this.popup.style.display === 'none') return;
+    // dictionaryapi.dev only covers single English-style tokens.
+    if (!DictionaryAPI.isLookupableWord(this.currentText)) return;
 
     let info: PronunciationInfo | null;
     try {
@@ -550,15 +567,27 @@ export class SelectionPopup {
     } catch {
       return;
     }
-    if (!info?.audioUrl) return;
+    if (!info?.phonetic) return;
     if (!this.popup || this.popup.style.display === 'none') return;
 
-    this.currentPronunciationAudio = info.audioUrl;
-    // Dict 可能给出不同于 LLM 的 IPA（例如变体读音）。这里仅补 audio，
-    // 不覆盖 LLM 的 phonetic，避免保存后两个读音打架。
-    if (info.phonetic && !this.currentPronunciation) {
-      this.currentPronunciation = { phonetic: info.phonetic, audioUrl: info.audioUrl };
+    const hadPhonetic = Boolean(this.currentPronunciation?.phonetic);
+    if (info.audioUrl) {
+      this.currentPronunciationAudio = info.audioUrl;
     }
+    // Dict 可能给出不同于 LLM 的 IPA（例如变体读音）。仅在没有 LLM 音标时
+    // 才采用词典的，避免保存后两个读音打架。
+    if (!hadPhonetic) {
+      this.currentPronunciation = { phonetic: info.phonetic, audioUrl: info.audioUrl };
+      this.insertPronunciationRow();
+    } else if (info.audioUrl && !this.currentPronunciation?.audioUrl) {
+      this.currentPronunciation = {
+        phonetic: this.currentPronunciation!.phonetic,
+        audioUrl: info.audioUrl,
+      };
+    }
+
+    // 补上播放按钮（真人录音）。TTS 兜底随时可用，不依赖这里。
+    this.insertAudioButton();
 
     // 保存生词后才到这里——补上 audioUrl。
     if (this.isSavedToVocabulary) {
@@ -569,12 +598,41 @@ export class SelectionPopup {
           translation: this.currentTranslation,
           targetLang: config.targetLang,
           pronunciation: this.currentPronunciation?.phonetic,
-          audioUrl: info.audioUrl,
+          audioUrl: this.currentPronunciationAudio || info.audioUrl,
         });
       } catch (error) {
         console.error('[EasyTranslate] failed to enrich saved entry with audioUrl', error);
       }
     }
+  }
+
+  /**
+   * Insert the phonetic row into an already-rendered popup. Used when the
+   * phonetic only becomes available after the translation was shown.
+   */
+  private insertPronunciationRow(): void {
+    if (!this.popup) return;
+    if (this.popup.querySelector('.immersive-translate-pronunciation')) return;
+
+    const original = this.popup.querySelector('#immersive-translate-original');
+    if (!original) return;
+
+    original.insertAdjacentHTML('afterend', this.renderPronunciation(this.currentPronunciation));
+    this.insertAudioButton();
+  }
+
+  /**
+   * Insert the speaker button into the phonetic row. The button is shown
+   * even without a recording — the system TTS can always speak the word.
+   */
+  private insertAudioButton(): void {
+    if (!this.popup) return;
+    const row = this.popup.querySelector('.immersive-translate-pronunciation');
+    if (!row) return;
+    if (row.querySelector('#btn-pronunciation-audio')) return;
+
+    row.insertAdjacentHTML('beforeend', this.renderAudioButton());
+    this.popup.querySelector('#btn-pronunciation-audio')?.addEventListener('click', () => this.playPronunciationAudio());
   }
 
   private renderPronunciation(pronunciation?: PronunciationInfo | null): string {

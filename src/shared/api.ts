@@ -1,5 +1,6 @@
 import { TranslationConfig, TranslationRequest, TranslationResponse } from './types';
 import { isChinese } from './text';
+import { getProvider } from './providers';
 
 /** How long to wait for the background service worker to answer. */
 const BACKGROUND_TIMEOUT_MS = 30_000;
@@ -52,9 +53,15 @@ export class TranslationAPI {
     //
     // Prompt 根据方向动态生成：英→中模式侧重意译；中→英模式侧重
     // 自然地道的英文（Twitter/Reddit 等口语场景）。
+    //
+    // 但并非所有引擎都能这么做：专用翻译模型（如 Index-Translate）
+    // 只会输出译文，既不认 JSON 输出指令也不会生成音标。对这类引擎
+    // 我们改用官方推荐的「纯翻译」提示语，并让前端另找音标来源。
+    const provider = getProvider(this.config.providerId);
     const sourceIsChinese = isChinese(text);
-    const systemPrompt = sourceIsChinese
-      ? `You are a professional translator writing for casual online conversation (Twitter, Reddit, Discord).
+    const systemPrompt = provider.jsonOutput
+      ? (sourceIsChinese
+        ? `You are a professional translator writing for casual online conversation (Twitter, Reddit, Discord).
 
 Translate the input text from Chinese (or other source language) into natural, idiomatic ${targetLang}. Match the casual register — contractions, common slang, and emoji are fine. Keep proper nouns, brand names, and code snippets verbatim. Never leave the translation empty.
 
@@ -67,7 +74,7 @@ Return a JSON object with EXACTLY these two fields:
 Rules:
 - Output ONLY the JSON object. No markdown fences, no commentary.
 - Keep the translation concise — chat replies should be punchy.`
-      : `You are a professional translator.
+        : `You are a professional translator.
 
 Return a JSON object with exactly these two fields:
 
@@ -78,11 +85,31 @@ Return a JSON object with exactly these two fields:
 Rules:
 - Output ONLY the JSON object. No markdown fences, no commentary.
 - "pronunciation" must start with "/" and end with "/" when non-empty.
-- Do not invent phonetics for non-word input.`;
+- Do not invent phonetics for non-word input.`)
+      : buildPlainTranslatePrompt(sourceIsChinese, targetLang, text);
 
     const userPrompt = context
       ? `Context: ${context}\n\nText to translate: ${text}`
       : text;
+
+    const body: Record<string, unknown> = {
+      model: this.config.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    };
+
+    // Only ask for structured output when the engine both understands the
+    // instruction and the endpoint accepts the parameter.
+    if (provider.jsonMode) {
+      body.response_format = { type: 'json_object' };
+    }
+    if (provider.extraBody) {
+      Object.assign(body, provider.extraBody);
+    }
 
     try {
       console.log('[EasyTranslate] Fetching from:', endpoint);
@@ -92,16 +119,7 @@ Rules:
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
         },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 2048,
-          response_format: { type: 'json_object' },
-        }),
+        body: JSON.stringify(body),
         mode: 'cors',
         credentials: 'omit',
       });
@@ -253,6 +271,26 @@ function describeHttpError(status: number, body: string): string {
       }
       return `API 请求失败（HTTP ${status}）。${suffix}`;
   }
+}
+
+/**
+ * Prompt for engines that only emit a plain translation (dedicated
+ * translation models). The wording mirrors Bilibili's own reference
+ * script so the model behaves the way it was tuned to.
+ */
+function buildPlainTranslatePrompt(sourceIsChinese: boolean, targetLang: string, text: string): string {
+  const style = sourceIsChinese
+    ? `Translate the input text from Chinese (or other source language) into natural, idiomatic ${targetLang}. Match the casual register — contractions, common slang, and emoji are fine. Keep proper nouns, brand names, and code snippets verbatim.`
+    : `Translate the input text into ${targetLang}. Keep it natural and fluent, preserve proper nouns and brand names.`;
+
+  return `You are a professional translator.
+
+${style}
+
+Translate the following text into ${targetLang}. Output ONLY the translated text — no explanations, no notes, no quotes, no JSON, no reasoning.
+
+Text to translate:
+${text}`;
 }
 
 /**

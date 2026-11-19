@@ -26,7 +26,7 @@ function findChunk(prefix) {
 }
 
 // api.ts imports isChinese() from text.ts, so we need that chunk too.
-const apiBundle = findChunk('shared-api-') + '\n' + findChunk('shared-text-');
+const apiBundle = findChunk('shared-api-') + '\n' + findChunk('shared-text-') + '\n' + findChunk('shared-providers-');
 
 function loadApi(window, fetchImpl) {
   window.fetch = fetchImpl;

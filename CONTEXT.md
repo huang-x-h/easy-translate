@@ -10,7 +10,9 @@
 | **Bilingual Translation** | Translates entire page and displays original + translated text side-by-side | Uses paragraph-by-paragraph layout |
 | **Vocabulary Book (生词本)** | User-saved entries of selection translations, viewable and exportable from the options page | Per-target-language dedup keyed on normalized original text |
 | **Daily Review (每日复习)** | Flashcard session over today's saved entries with self-rated recall (unknown/fuzzy/known) | Tracked via `lastReviewedAt` and `reviewCount` on each entry; audio auto-plays on each new card |
-| **Pronunciation Enrichment** | Async lookup against dictionaryapi.dev to backfill missing phonetic/audio on vocabulary entries | Fires from the popup after save when no pronunciation is present; idempotent |
+| **Pronunciation Enrichment** | Fallback lookup against dictionaryapi.dev to backfill a phonetic/audio when the engine can't supply one | Fires from the popup for any single-word selection; only used when the engine returned no IPA |
+| **Phonetic Text** | The IPA string shown next to the original word | Two sources, in priority order: (1) the translation engine, when it is a general LLM; (2) dictionaryapi.dev, for English tokens only |
+| **Pronunciation Audio** | The sound played by the speaker button | Two sources: a recorded mp3 from dictionaryapi.dev, else the system TTS via `chrome.tts` — engine-independent, so it always works |
 | **Content Script** | JavaScript injected into web pages to read/modify DOM | Isolated from page scripts via Shadow DOM |
 | **Service Worker** | Background script in Manifest V3, handles API calls and storage | Event-driven, not persistent |
 | **Readability** | Algorithm to extract main article content from web pages | Based on Mozilla's Readability library |
@@ -19,7 +21,10 @@
 
 | Term | Definition | Notes |
 |------|------------|-------|
-| **OpenAI-Compatible API** | API following OpenAI's /v1/chat/completions format | Supported by Groq, OpenRouter, Ollama, etc. |
+| **OpenAI-Compatible API** | API following OpenAI's /v1/chat/completions format | Supported by Zhipu, OpenRouter, Ollama, etc. |
+| **Translation Engine (Provider)** | The configured backend + its declared capabilities | `zhipu` (general LLM), `index-translate` (dedicated translation model), `custom` |
+| **Engine Capability** | What a provider can do: JSON output, IPA generation, response_format support | Declared in `src/shared/providers.ts`; the request builder reads it instead of hard-coding checks |
+| **Index-Translate** | Bilibili's open-source translation model family, served as a free OpenAI-compatible public API | `https://index-translate.bilibili.com/v1`, model `Index-Translate-35B-A3B`, key not validated; vLLM-backed so thinking must be disabled |
 | **Streaming Response** | Server sends partial translation results progressively | Better UX for real-time feedback |
 | **Batch Translation** | Sending multiple paragraphs for parallel translation | Efficient for full-page translation |
 | **Translation Cache** | Local storage of translated text keyed by content hash | Reduces API calls, 7-day TTL |

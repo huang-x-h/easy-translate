@@ -1,9 +1,10 @@
 import { StorageManager } from '../shared/storage';
-import { TranslationConfig, DEFAULT_CONFIG, VocabularyEntry, ReviewRating } from '../shared/types';
+import { TranslationConfig, DEFAULT_CONFIG, VocabularyEntry, ReviewRating, ProviderId } from '../shared/types';
 import { TranslationAPI } from '../shared/api';
 import { VocabularyManager, BackfillResult } from '../shared/vocabulary';
 import { playPronunciation } from '../shared/speech';
 import { isWordLike } from '../shared/text';
+import { getProvider } from '../shared/providers';
 
 /**
  * Scrolls the vocabulary card into view and pulses a short highlight.
@@ -46,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const testResult = document.getElementById('testResult') as HTMLDivElement;
   const serviceCards = document.querySelectorAll('.service-card');
 
-  let currentService = 'zhipu';
+  let currentService: ProviderId = 'zhipu';
 
   // Load current configuration
   async function loadConfig() {
@@ -55,7 +56,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiKeyInput.value = config.apiKey;
     modelInput.value = config.model;
     targetLangSelect.value = config.targetLang;
+    currentService = config.providerId ?? 'zhipu';
     updateServiceCards();
+    updateEngineHint();
   }
 
   function updateServiceCards() {
@@ -69,15 +72,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Service card selection
   serviceCards.forEach(card => {
     card.addEventListener('click', () => {
-      currentService = (card as HTMLElement).dataset.service || 'custom';
+      currentService = ((card as HTMLElement).dataset.service || 'custom') as ProviderId;
       updateServiceCards();
-      
-      if (currentService === 'zhipu') {
-        apiEndpointInput.value = 'https://open.bigmodel.cn/api/paas/v4';
-        modelInput.value = 'glm-4-flash';
+
+      const spec = getProvider(currentService);
+      if (currentService !== 'custom') {
+        apiEndpointInput.value = spec.endpoint;
+        modelInput.value = spec.model;
+        apiKeyInput.value = spec.apiKey;
       }
+      updateEngineHint();
     });
   });
+
+  /**
+   * Tell the user what the selected engine can and cannot do. The
+   * capabilities differ a lot between a general LLM and a dedicated
+   * translation model, so we spell it out instead of letting people
+   * discover it by trial and error.
+   */
+  function updateEngineHint(): void {
+    const hint = document.getElementById('engineHint') as HTMLElement;
+    if (!hint) return;
+
+    if (currentService === 'index-translate') {
+      hint.textContent = '免费公网 API，无需密钥。专用翻译模型：不生成音标（英文单词的音标由词典补充），发音使用系统语音。';
+      hint.dataset.tone = 'info';
+      return;
+    }
+    if (currentService === 'zhipu') {
+      hint.textContent = '通用大模型：可同时生成 IPA 音标，发音优先使用真人录音。';
+      hint.dataset.tone = 'info';
+      return;
+    }
+    hint.textContent = '自定义服务：按 OpenAI 兼容格式调用。音标能力取决于所用模型。';
+    hint.dataset.tone = 'info';
+  }
 
   // Test connection
   testBtn.addEventListener('click', async () => {
@@ -88,6 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       targetLang: 'zh-CN',
       translationStyle: 'natural',
       translationDirection: 'auto',
+      providerId: currentService,
     };
 
     if (!config.apiKey) {
@@ -134,6 +165,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       targetLang: targetLangSelect.value,
       translationStyle: 'natural',
       translationDirection: 'auto',
+      providerId: currentService,
     };
 
     try {

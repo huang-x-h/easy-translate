@@ -74,23 +74,28 @@
             <div class="service-name">智谱AI</div>
             <div class="service-desc">国内大模型，中文优化好</div>
           </div>
+          <div class="service-card" data-service="index-translate">
+            <div class="service-name">哔哩哔哩 Index-Translate</div>
+            <div class="service-desc">免费公网 API · 150 语言 · 无需密钥</div>
+          </div>
           <div class="service-card" data-service="custom">
             <div class="service-name">自定义</div>
             <div class="service-desc">使用自己的 API 服务</div>
           </div>
         </div>
+        <div class="hint" id="engineHint" data-tone="info"></div>
       </div>
       
       <div class="form-group">
         <label for="apiEndpoint">API Endpoint</label>
         <input type="text" id="apiEndpoint" placeholder="https://open.bigmodel.cn/api/paas/v4">
-        <div class="hint">智谱AI: https://open.bigmodel.cn/api/paas/v4</div>
+        <div class="hint">智谱AI: https://open.bigmodel.cn/api/paas/v4<br />哔哩哔哩: https://index-translate.bilibili.com/v1</div>
       </div>
       
       <div class="form-group">
         <label for="apiKey">API Key</label>
         <input type="password" id="apiKey" placeholder="您的智谱AI API Key">
-        <div class="hint">从 https://open.bigmodel.cn/ 获取 API Key</div>
+        <div class="hint">从 https://open.bigmodel.cn/ 获取 API Key。哔哩哔哩 Index-Translate 无需密钥，任意值即可。</div>
       </div>
       
       <div class="form-group">

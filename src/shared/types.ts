@@ -10,6 +10,11 @@ export interface TranslationConfig {
    * - 'en-to-zh' / 'zh-to-en' — explicit, overrides auto-detection
    */
   translationDirection: TranslationDirection;
+  /**
+   * Which translation engine is in use. Determines the engine's
+   * capabilities (JSON output, IPA support, extra request fields).
+   */
+  providerId: ProviderId;
 }
 
 export interface TranslationRequest {
@@ -68,6 +73,9 @@ export type TranslationDirection = 'auto' | 'en-to-zh' | 'zh-to-en';
 
 export const DEFAULT_DIRECTION: TranslationDirection = 'auto';
 
+/** Which translation engine is configured. */
+export type ProviderId = 'zhipu' | 'index-translate' | 'custom';
+
 export interface ParagraphData {
   element: HTMLElement;
   text: string;
@@ -81,6 +89,7 @@ export const DEFAULT_CONFIG: TranslationConfig = {
   model: 'glm-4-flash',
   translationStyle: 'natural',
   translationDirection: 'auto',
+  providerId: 'zhipu',
 };
 
 export const STORAGE_KEYS = {
